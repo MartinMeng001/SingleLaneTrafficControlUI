@@ -1,5 +1,12 @@
 <template>
   <div class="road-network">
+    <!-- 交通统计面板 -->
+    <TrafficStatisticsPanel
+      :segments="segments"
+      :segment-vehicles="segmentVehicles"
+      :last-update="lastUpdate"
+    />
+
     <div class="network-container">
       <!-- 上层：路段层 -->
       <div class="segments-layer">
@@ -22,6 +29,24 @@
             <span class="queue-icon">🚗</span>
             <span class="queue-count">{{ downstreamQueue }}</span>
           </div>
+          <div class="queue-details">
+            <div class="queue-subtitle">排队车辆</div>
+            <div class="queue-vehicles">
+              <span
+                v-for="vehicle in downstreamQueueVehicles.slice(0, 3)"
+                :key="vehicle"
+                class="queue-vehicle-id"
+              >
+                {{ vehicle }}
+              </span>
+              <span
+                v-if="downstreamQueueVehicles.length > 3"
+                class="more-queue-vehicles"
+              >
+                +{{ downstreamQueueVehicles.length - 3 }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- 会车区 -->
@@ -40,6 +65,24 @@
           <div class="queue-info">
             <span class="queue-icon">🚗</span>
             <span class="queue-count">{{ upstreamQueue }}</span>
+          </div>
+          <div class="queue-details">
+            <div class="queue-subtitle">排队车辆</div>
+            <div class="queue-vehicles">
+              <span
+                v-for="vehicle in upstreamQueueVehicles.slice(0, 3)"
+                :key="vehicle"
+                class="queue-vehicle-id"
+              >
+                {{ vehicle }}
+              </span>
+              <span
+                v-if="upstreamQueueVehicles.length > 3"
+                class="more-queue-vehicles"
+              >
+                +{{ upstreamQueueVehicles.length - 3 }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -79,17 +122,26 @@ import RoadSegment from './RoadSegment.vue'
 import MeetingZone from './MeetingZone.vue'
 import SegmentDetailModal from './SegmentDetailModal.vue'
 import ZoneControlModal from './ZoneControlModal.vue'
+import TrafficStatisticsPanel from './TrafficStatisticsPanel.vue'
 
 interface Props {
   segments: Segment[]
   meetingZones: MeetingZoneType[]
   upstreamQueue?: number
   downstreamQueue?: number
+  segmentVehicles: Record<number, {
+    upstreamVehicles: string[]
+    downstreamVehicles: string[]
+    upstreamCount: number
+    downstreamCount: number
+  }>
+  lastUpdate?: Date
 }
 
 const props = withDefaults(defineProps<Props>(), {
   upstreamQueue: 0,
-  downstreamQueue: 0
+  downstreamQueue: 0,
+  lastUpdate: () => new Date()
 })
 
 defineEmits<{
@@ -100,6 +152,25 @@ defineEmits<{
 
 const selectedSegment = ref<Segment | null>(null)
 const selectedZone = ref<MeetingZoneType | null>(null)
+
+// 模拟排队车辆ID数据
+const upstreamQueueVehicles = computed(() => {
+  const queueSize = props.upstreamQueue
+  if (queueSize === 0) return []
+
+  return Array.from({ length: queueSize }, (_, i) =>
+    `京A${String(Math.floor(Math.random() * 900000) + 100000)}`
+  )
+})
+
+const downstreamQueueVehicles = computed(() => {
+  const queueSize = props.downstreamQueue
+  if (queueSize === 0) return []
+
+  return Array.from({ length: queueSize }, (_, i) =>
+    `京B${String(Math.floor(Math.random() * 900000) + 100000)}`
+  )
+})
 
 const selectSegment = (segment: Segment) => {
   selectedSegment.value = segment
@@ -113,7 +184,7 @@ const selectZone = (zone: MeetingZoneType) => {
 
 const handleZoneControl = (data: { zoneId: number, action: string }) => {
   // 发送控制指令到父组件
-  $emit('zoneControl', data)
+  emit('zoneControl', data)
   selectedZone.value = null
 }
 </script>
@@ -156,19 +227,25 @@ const handleZoneControl = (data: { zoneId: number, action: string }) => {
 /* 入口区域 */
 .entrance-area {
   background: linear-gradient(135deg, #ffeaa7, #fab1a0);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 1rem;
-  min-width: 120px;
+  min-width: 140px;
   text-align: center;
   border: 2px solid #e17055;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.entrance-area:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .entrance-label {
   font-size: 0.9rem;
   font-weight: 600;
   color: #d63031;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .queue-info {
@@ -176,6 +253,7 @@ const handleZoneControl = (data: { zoneId: number, action: string }) => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .queue-icon {
@@ -184,11 +262,49 @@ const handleZoneControl = (data: { zoneId: number, action: string }) => {
 
 .queue-count {
   background: rgba(255, 255, 255, 0.9);
-  padding: 0.25rem 0.5rem;
-  border-radius: 12px;
+  padding: 0.25rem 0.75rem;
+  border-radius: 15px;
   font-weight: bold;
   color: #d63031;
-  min-width: 30px;
+  min-width: 35px;
+  font-size: 1rem;
+}
+
+.queue-details {
+  border-top: 1px solid rgba(214, 48, 49, 0.3);
+  padding-top: 0.75rem;
+}
+
+.queue-subtitle {
+  font-size: 0.8rem;
+  color: #d63031;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.queue-vehicles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.queue-vehicle-id {
+  background: rgba(255, 255, 255, 0.8);
+  color: #d63031;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-family: monospace;
+  font-weight: 500;
+  border: 1px solid rgba(214, 48, 49, 0.3);
+}
+
+.more-queue-vehicles {
+  color: #d63031;
+  font-size: 0.7rem;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 /* 连接线 */
@@ -235,8 +351,12 @@ const handleZoneControl = (data: { zoneId: number, action: string }) => {
   }
 
   .entrance-area {
-    min-width: 100px;
-    padding: 0.75rem;
+    min-width: 120px;
+    padding: 0.875rem;
+  }
+
+  .queue-vehicle-id {
+    font-size: 0.65rem;
   }
 }
 
@@ -263,6 +383,8 @@ const handleZoneControl = (data: { zoneId: number, action: string }) => {
   .entrance-area {
     order: -1;
     margin-bottom: 1rem;
+    min-width: 100px;
+    padding: 0.75rem;
   }
 
   .left-entrance {
@@ -271,6 +393,37 @@ const handleZoneControl = (data: { zoneId: number, action: string }) => {
 
   .right-entrance {
     order: 3;
+  }
+
+  .queue-vehicles {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .entrance-area {
+    min-width: 90px;
+    padding: 0.5rem;
+  }
+
+  .entrance-label {
+    font-size: 0.8rem;
+  }
+
+  .queue-count {
+    font-size: 0.9rem;
+    padding: 0.2rem 0.6rem;
+  }
+
+  .queue-subtitle {
+    font-size: 0.7rem;
+  }
+
+  .queue-vehicle-id {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
   }
 }
 </style>

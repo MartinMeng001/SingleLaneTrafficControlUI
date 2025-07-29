@@ -40,6 +40,13 @@
             <h3 class="section-title">
               上行方向
               <TrafficLight :state="segment.upstreamLight" :size="'small'" />
+              <span
+                v-if="!upstreamStatusConsistent"
+                class="inconsistent-warning"
+                title="检测状态与实际车辆数不一致"
+              >
+                ⚠️
+              </span>
             </h3>
             <div class="direction-info">
               <div class="vehicle-count">
@@ -58,7 +65,7 @@
                   <span
                     v-for="vehicleId in upstreamVehicleIds"
                     :key="vehicleId"
-                    class="vehicle-id"
+                    class="vehicle-id upstream"
                   >
                     {{ vehicleId }}
                   </span>
@@ -75,6 +82,13 @@
             <h3 class="section-title">
               下行方向
               <TrafficLight :state="segment.downstreamLight" :size="'small'" />
+              <span
+                v-if="!downstreamStatusConsistent"
+                class="inconsistent-warning"
+                title="检测状态与实际车辆数不一致"
+              >
+                ⚠️
+              </span>
             </h3>
             <div class="direction-info">
               <div class="vehicle-count">
@@ -93,7 +107,7 @@
                   <span
                     v-for="vehicleId in downstreamVehicleIds"
                     :key="vehicleId"
-                    class="vehicle-id"
+                    class="vehicle-id downstream"
                   >
                     {{ vehicleId }}
                   </span>
@@ -120,6 +134,49 @@
                   ></div>
                 </div>
               </div>
+
+              <div class="stat-item">
+                <span class="stat-label">实际车辆分布:</span>
+                <div class="distribution-chart">
+                  <div class="distribution-bar">
+                    <div
+                      class="distribution-section upstream"
+                      :style="{ width: upstreamPercentage + '%' }"
+                      :title="`上行: ${upstreamVehicleCount} 辆`"
+                    ></div>
+                    <div
+                      class="distribution-section downstream"
+                      :style="{ width: downstreamPercentage + '%' }"
+                      :title="`下行: ${downstreamVehicleCount} 辆`"
+                    ></div>
+                  </div>
+                  <div class="distribution-labels">
+                    <span class="label upstream">上行: {{ upstreamVehicleCount }}</span>
+                    <span class="label downstream">下行: {{ downstreamVehicleCount }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 数据一致性检查 -->
+          <div class="info-section" v-if="!upstreamStatusConsistent || !downstreamStatusConsistent">
+            <h3 class="section-title">⚠️ 数据异常提醒</h3>
+            <div class="warning-list">
+              <div v-if="!upstreamStatusConsistent" class="warning-item">
+                <span class="warning-icon">🔍</span>
+                <span class="warning-text">
+                  上行方向：检测状态显示"{{ segment.upstreamVehicles ? '有车' : '无车' }}"，
+                  但实际记录有 {{ upstreamVehicleCount }} 辆车
+                </span>
+              </div>
+              <div v-if="!downstreamStatusConsistent" class="warning-item">
+                <span class="warning-icon">🔍</span>
+                <span class="warning-text">
+                  下行方向：检测状态显示"{{ segment.downstreamVehicles ? '有车' : '无车' }}"，
+                  但实际记录有 {{ downstreamVehicleCount }} 辆车
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -138,6 +195,7 @@
 import { computed } from 'vue'
 import type { Segment } from '@/types/monitoring'
 import { getSegmentStatusText } from '@/utils/format'
+import { useMonitoringStore } from '@/stores/monitoring'
 import TrafficLight from './TrafficLight.vue'
 
 interface Props {
@@ -145,36 +203,31 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const monitoringStore = useMonitoringStore()
 
 defineEmits<{
   close: []
 }>()
 
-// 模拟车辆数据 - 在实际项目中这些数据应该从后端获取
+// 获取真实的车辆数据
+const vehicleDetails = computed(() => {
+  return monitoringStore.getSegmentVehicleDetails(props.segment.id)
+})
+
 const upstreamVehicleCount = computed(() => {
-  // 实际车辆数可能与检测状态不完全一致
-  return props.segment.upstreamVehicles ? Math.floor(Math.random() * 3) + 1 : 0
+  return vehicleDetails.value.upstreamCount || vehicleDetails.value.upstreamVehicles.length
 })
 
 const downstreamVehicleCount = computed(() => {
-  return props.segment.downstreamVehicles ? Math.floor(Math.random() * 3) + 1 : 0
+  return vehicleDetails.value.downstreamCount || vehicleDetails.value.downstreamVehicles.length
 })
 
 const upstreamVehicleIds = computed(() => {
-  if (!props.segment.upstreamVehicles) return []
-  // 模拟车牌号
-  const count = upstreamVehicleCount.value
-  return Array.from({ length: count }, (_, i) =>
-    `京A${String(Math.floor(Math.random() * 900000) + 100000)}`
-  )
+  return vehicleDetails.value.upstreamVehicles || []
 })
 
 const downstreamVehicleIds = computed(() => {
-  if (!props.segment.downstreamVehicles) return []
-  const count = downstreamVehicleCount.value
-  return Array.from({ length: count }, (_, i) =>
-    `京B${String(Math.floor(Math.random() * 900000) + 100000)}`
-  )
+  return vehicleDetails.value.downstreamVehicles || []
 })
 
 const occupancyRate = computed(() => {
@@ -186,6 +239,26 @@ const occupancyRateClass = computed(() => {
   if (rate >= 90) return 'critical'
   if (rate >= 70) return 'warning'
   return 'normal'
+})
+
+// 计算实际车辆数和检测状态的一致性
+const upstreamStatusConsistent = computed(() => {
+  return (upstreamVehicleCount.value > 0) === props.segment.upstreamVehicles
+})
+
+const downstreamStatusConsistent = computed(() => {
+  return (downstreamVehicleCount.value > 0) === props.segment.downstreamVehicles
+})
+
+// 车辆分布百分比
+const upstreamPercentage = computed(() => {
+  const total = upstreamVehicleCount.value + downstreamVehicleCount.value
+  return total === 0 ? 0 : Math.round((upstreamVehicleCount.value / total) * 100)
+})
+
+const downstreamPercentage = computed(() => {
+  const total = upstreamVehicleCount.value + downstreamVehicleCount.value
+  return total === 0 ? 0 : Math.round((downstreamVehicleCount.value / total) * 100)
 })
 </script>
 
@@ -208,7 +281,7 @@ const occupancyRateClass = computed(() => {
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   max-height: 80vh;
   overflow: hidden;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
@@ -283,6 +356,12 @@ const occupancyRateClass = computed(() => {
   font-size: 1.1rem;
   border-bottom: 2px solid #e9ecef;
   padding-bottom: 0.5rem;
+}
+
+.inconsistent-warning {
+  color: #ffc107;
+  font-size: 1rem;
+  cursor: help;
 }
 
 .info-grid {
@@ -375,6 +454,14 @@ const occupancyRateClass = computed(() => {
   font-family: monospace;
 }
 
+.vehicle-id.upstream {
+  background: #007bff;
+}
+
+.vehicle-id.downstream {
+  background: #6f42c1;
+}
+
 .no-vehicles {
   color: #6c757d;
   font-style: italic;
@@ -422,6 +509,69 @@ const occupancyRateClass = computed(() => {
 .stat-fill.warning { background: #ffc107; }
 .stat-fill.critical { background: #dc3545; }
 
+.distribution-chart {
+  margin-top: 0.5rem;
+}
+
+.distribution-bar {
+  display: flex;
+  height: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #e9ecef;
+  margin-bottom: 0.5rem;
+}
+
+.distribution-section {
+  transition: width 0.3s ease;
+}
+
+.distribution-section.upstream {
+  background: linear-gradient(90deg, #007bff, #40a9ff);
+}
+
+.distribution-section.downstream {
+  background: linear-gradient(90deg, #6f42c1, #9c27b0);
+}
+
+.distribution-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.label.upstream { color: #007bff; }
+.label.downstream { color: #6f42c1; }
+
+.warning-list {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.warning-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.warning-item:last-child {
+  margin-bottom: 0;
+}
+
+.warning-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.warning-text {
+  color: #856404;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .modal-footer {
   padding: 1rem 1.5rem;
   border-top: 1px solid #e9ecef;
@@ -461,6 +611,11 @@ const occupancyRateClass = computed(() => {
   .info-item {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .distribution-labels {
+    flex-direction: column;
     gap: 0.25rem;
   }
 }

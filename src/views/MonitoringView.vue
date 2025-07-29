@@ -13,6 +13,7 @@
 
     <RoadNetwork
       :segments="monitoringStore.segments"
+      :segment-vehicles="monitoringStore.segmentVehicles"
       :meetingZones="monitoringStore.meetingZones"
       :upstreamQueue="upstreamQueue"
       :downstreamQueue="downstreamQueue"

@@ -1,85 +1,169 @@
 <template>
-  <div class="meeting-zone" :class="zoneClasses">
+  <div
+    class="meeting-zone"
+    :class="[
+      `status-${overallStatus}`,
+      {
+        'selected': selected,
+        'full': zone.full,
+        'clickable': true
+      }
+    ]"
+    @click="$emit('click')"
+  >
+    <!-- 会车区名称 -->
     <div class="zone-header">
-      <h3 class="zone-title">{{ zone.name }}</h3>
-      <span class="zone-capacity">{{ totalOccupancy }}/{{ zone.capacity }}</span>
-    </div>
-
-    <div class="zone-directions">
-      <div class="zone-direction">
-        <span class="direction-label">上行</span>
-        <span class="zone-status" :class="`status-${zone.upstream}`">
-          {{ getZoneStatusText(zone.upstream) }}
-        </span>
-        <span class="vehicle-count">({{ zone.upstreamCount }})</span>
-      </div>
-
-      <div class="zone-direction">
-        <span class="direction-label">下行</span>
-        <span class="zone-status" :class="`status-${zone.downstream}`">
-          {{ getZoneStatusText(zone.downstream) }}
-        </span>
-        <span class="vehicle-count">({{ zone.downstreamCount }})</span>
+      <h3 class="zone-name">{{ zone.name }}</h3>
+      <div class="zone-status-badge" :class="`badge-${overallStatus}`">
+        {{ getStatusText(overallStatus) }}
       </div>
     </div>
 
-    <div class="zone-footer">
-      <div class="occupancy-bar">
+    <!-- 方向状态 -->
+    <div class="directions">
+      <div class="direction-section">
+        <div class="direction-header">
+          <span class="direction-icon">⬆️</span>
+          <span class="direction-label">上行</span>
+        </div>
+        <div class="direction-status" :class="`status-${zone.upstream}`">
+          <span class="status-text">{{ getZoneStatusText(zone.upstream) }}</span>
+          <span class="vehicle-count">({{ zone.upstreamCount || 0 }})</span>
+        </div>
+        <div class="direction-visual">
+          <div
+            v-for="i in Math.min(zone.upstreamCount || 0, 3)"
+            :key="`up-${i}`"
+            class="vehicle-dot upstream"
+          ></div>
+        </div>
+      </div>
+
+      <div class="direction-section">
+        <div class="direction-header">
+          <span class="direction-icon">⬇️</span>
+          <span class="direction-label">下行</span>
+        </div>
+        <div class="direction-status" :class="`status-${zone.downstream}`">
+          <span class="status-text">{{ getZoneStatusText(zone.downstream) }}</span>
+          <span class="vehicle-count">({{ zone.downstreamCount || 0 }})</span>
+        </div>
+        <div class="direction-visual">
+          <div
+            v-for="i in Math.min(zone.downstreamCount || 0, 3)"
+            :key="`down-${i}`"
+            class="vehicle-dot downstream"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 容量指示器 -->
+    <div class="capacity-indicator">
+      <div class="capacity-label">容量</div>
+      <div class="capacity-bar">
         <div
-          class="occupancy-fill"
-          :style="{ width: occupancyPercentage + '%' }"
-          :class="occupancyClass"
+          class="capacity-fill"
+          :style="{ width: capacityPercentage + '%' }"
+          :class="capacityClass"
         ></div>
       </div>
+      <div class="capacity-text">
+        {{ totalOccupancy }}/{{ zone.capacity }}
+      </div>
     </div>
+
+    <!-- 满载警告 -->
+    <div v-if="zone.full" class="full-warning">
+      <span class="warning-icon">🚫</span>
+      <span class="warning-text">已满</span>
+    </div>
+
+    <!-- 选中指示器 -->
+    <div v-if="selected" class="selection-indicator"></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { MeetingZoneType } from '@/types/monitoring'
-import { getZoneStatusText } from '@/utils/format'
 
 interface Props {
   zone: MeetingZoneType
+  selected?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  selected: false
+})
 
 defineEmits<{
+  click: []
   update: [data: { id: number, updates: Partial<MeetingZoneType> }]
 }>()
 
-const zoneClasses = computed(() => ({
-  'zone-full': props.zone.full,
-  'zone-critical': occupancyPercentage.value >= 90
-}))
-
-const totalOccupancy = computed(() =>
-  props.zone.upstreamCount + props.zone.downstreamCount
-)
-
-const occupancyPercentage = computed(() =>
-  Math.round((totalOccupancy.value / props.zone.capacity) * 100)
-)
-
-const occupancyClass = computed(() => {
-  const percentage = occupancyPercentage.value
-  if (percentage >= 90) return 'occupancy-critical'
-  if (percentage >= 70) return 'occupancy-warning'
-  return 'occupancy-normal'
+const totalOccupancy = computed(() => {
+  return (props.zone.upstreamCount || 0) + (props.zone.downstreamCount || 0)
 })
+
+const capacityPercentage = computed(() => {
+  return Math.round((totalOccupancy.value / props.zone.capacity) * 100)
+})
+
+const capacityClass = computed(() => {
+  const percentage = capacityPercentage.value
+  if (percentage >= 90) return 'critical'
+  if (percentage >= 70) return 'warning'
+  return 'normal'
+})
+
+const overallStatus = computed(() => {
+  if (props.zone.full) return 'full'
+  if (totalOccupancy.value > 0) return 'occupied'
+  return 'empty'
+})
+
+const getZoneStatusText = (status: string) => {
+  switch (status) {
+    case 'empty': return '空闲'
+    case 'occupied': return '有车'
+    case 'full': return '满载'
+    default: return '未知'
+  }
+}
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'empty': return '空闲'
+    case 'occupied': return '使用中'
+    case 'full': return '已满'
+    default: return '未知'
+  }
+}
 </script>
 
 <style scoped>
 .meeting-zone {
-  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  background: white;
   border-radius: 12px;
-  padding: 1.5rem;
-  min-width: 180px;
+  padding: 1rem;
+  min-width: 200px;
+  max-width: 240px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border: 2px solid #2196f3;
   transition: all 0.3s ease;
+  position: relative;
+  cursor: pointer;
+  border: 3px solid transparent;
+}
+
+.meeting-zone.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.meeting-zone.selected {
+  border-color: #28a745;
+  box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
 }
 
 .zone-full {

@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import type { Segment, MeetingZoneType, TrafficStatistics, VehicleEvent } from '@/types/monitoring'
 
 export const useMonitoringStore = defineStore('monitoring', () => {
-  // 状态数据
+  // 状态数据 - 现在包含4个路段和3个会车区
   const segments = ref<Segment[]>([
     {
       id: 0,
@@ -40,6 +40,18 @@ export const useMonitoringStore = defineStore('monitoring', () => {
       capacity: 5,
       currentCount: 4,
       status: 'conflict'
+    },
+    {
+      id: 3,
+      name: '路段3',
+      upstreamLight: 'yellow',
+      downstreamLight: 'yellow',
+      upstreamVehicles: false,
+      downstreamVehicles: false,
+      conflict: false,
+      capacity: 5,
+      currentCount: 0,
+      status: 'empty'
     }
   ])
 
@@ -63,6 +75,16 @@ export const useMonitoringStore = defineStore('monitoring', () => {
       capacity: 3,
       upstreamCount: 3,
       downstreamCount: 2
+    },
+    {
+      id: 2,
+      name: '会车区2',
+      upstream: 'empty',
+      downstream: 'occupied',
+      full: false,
+      capacity: 4,
+      upstreamCount: 0,
+      downstreamCount: 1
     }
   ])
 
@@ -76,6 +98,39 @@ export const useMonitoringStore = defineStore('monitoring', () => {
   const isConnected = ref(true)
   const lastUpdateTime = ref(new Date())
 
+  // 新增：详细车辆信息存储
+  const segmentVehicles = ref<Record<number, {
+    upstreamVehicles: string[]
+    downstreamVehicles: string[]
+    upstreamCount: number
+    downstreamCount: number
+  }>>({
+    0: {
+      upstreamVehicles: ['京A12345', '京B67890'],
+      downstreamVehicles: [],
+      upstreamCount: 2,
+      downstreamCount: 0
+    },
+    1: {
+      upstreamVehicles: [],
+      downstreamVehicles: ['京C11111'],
+      upstreamCount: 0,
+      downstreamCount: 1
+    },
+    2: {
+      upstreamVehicles: ['京D22222', '京E33333'],
+      downstreamVehicles: ['京F44444', '京G55555'],
+      upstreamCount: 3, // 可能有未识别车牌的车辆
+      downstreamCount: 2
+    },
+    3: {
+      upstreamVehicles: [],
+      downstreamVehicles: [],
+      upstreamCount: 0,
+      downstreamCount: 0
+    }
+  })
+
   // 计算属性
   const totalConflicts = computed(() => {
     return segments.value.filter(segment => segment.conflict).length
@@ -88,12 +143,23 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     return 'healthy'
   })
 
+  // 获取路段详细车辆信息
+  const getSegmentVehicleDetails = (segmentId: number) => {
+    return segmentVehicles.value[segmentId] || {
+      upstreamVehicles: [],
+      downstreamVehicles: [],
+      upstreamCount: 0,
+      downstreamCount: 0
+    }
+  }
+
   // 动作
   const updateSegment = (segmentId: number, updates: Partial<Segment>) => {
     const index = segments.value.findIndex(s => s.id === segmentId)
     if (index !== -1) {
       segments.value[index] = { ...segments.value[index], ...updates }
       updateSegmentStatus(segmentId)
+      lastUpdateTime.value = new Date()
     }
   }
 
@@ -101,7 +167,27 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     const index = meetingZones.value.findIndex(z => z.id === zoneId)
     if (index !== -1) {
       meetingZones.value[index] = { ...meetingZones.value[index], ...updates }
+      lastUpdateTime.value = new Date()
     }
+  }
+
+  const updateSegmentVehicles = (segmentId: number, vehicleData: {
+    upstreamVehicles?: string[]
+    downstreamVehicles?: string[]
+    upstreamCount?: number
+    downstreamCount?: number
+  }) => {
+    if (!segmentVehicles.value[segmentId]) {
+      segmentVehicles.value[segmentId] = {
+        upstreamVehicles: [],
+        downstreamVehicles: [],
+        upstreamCount: 0,
+        downstreamCount: 0
+      }
+    }
+
+    Object.assign(segmentVehicles.value[segmentId], vehicleData)
+    lastUpdateTime.value = new Date()
   }
 
   const updateSegmentStatus = (segmentId: number) => {
@@ -121,6 +207,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
 
   const updateStatistics = (newStats: Partial<TrafficStatistics>) => {
     statistics.value = { ...statistics.value, ...newStats }
+    lastUpdateTime.value = new Date()
   }
 
   const processVehicleEvent = (event: VehicleEvent) => {
@@ -138,8 +225,65 @@ export const useMonitoringStore = defineStore('monitoring', () => {
         segment.downstreamVehicles = event.eventType === 'enter'
       }
 
+      // 更新车辆详细信息
+      const vehicleDetails = getSegmentVehicleDetails(segmentId)
+      const vehicleList = event.direction === 'upstream'
+        ? vehicleDetails.upstreamVehicles
+        : vehicleDetails.downstreamVehicles
+
+      if (event.eventType === 'enter') {
+        if (!vehicleList.includes(event.vehicleId)) {
+          vehicleList.push(event.vehicleId)
+        }
+      } else {
+        const index = vehicleList.indexOf(event.vehicleId)
+        if (index > -1) {
+          vehicleList.splice(index, 1)
+        }
+      }
+
       updateSegmentStatus(segmentId)
     }
+  }
+
+  // 模拟控制操作
+  const executeZoneControl = (zoneId: number, action: string) => {
+    return new Promise<{ success: boolean, message: string }>((resolve) => {
+      // 模拟网络延迟
+      setTimeout(() => {
+        const zone = meetingZones.value.find(z => z.id === zoneId)
+        if (!zone) {
+          resolve({ success: false, message: '会车区不存在' })
+          return
+        }
+
+        // 模拟操作成功率（90%）
+        const success = Math.random() > 0.1
+
+        if (success) {
+          // 根据操作类型更新会车区状态
+          switch (action) {
+            case 'release_upstream':
+              // 实际应该调用信号控制系统
+              resolve({ success: true, message: '上行放行指令已发送' })
+              break
+            case 'release_downstream':
+              resolve({ success: true, message: '下行放行指令已发送' })
+              break
+            case 'prohibit_all':
+              resolve({ success: true, message: '禁行指令已发送' })
+              break
+            case 'release_control':
+              resolve({ success: true, message: '已恢复自动控制' })
+              break
+            default:
+              resolve({ success: false, message: '未知操作类型' })
+          }
+        } else {
+          resolve({ success: false, message: '操作执行失败，请重试' })
+        }
+      }, 1000 + Math.random() * 2000) // 1-3秒延迟
+    })
   }
 
   return {
@@ -149,6 +293,7 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     statistics,
     isConnected,
     lastUpdateTime,
+    segmentVehicles,
 
     // 计算属性
     totalConflicts,
@@ -157,7 +302,10 @@ export const useMonitoringStore = defineStore('monitoring', () => {
     // 动作
     updateSegment,
     updateMeetingZone,
+    updateSegmentVehicles,
     updateStatistics,
-    processVehicleEvent
+    processVehicleEvent,
+    getSegmentVehicleDetails,
+    executeZoneControl
   }
 })

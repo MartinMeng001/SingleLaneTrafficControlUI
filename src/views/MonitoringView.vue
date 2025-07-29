@@ -14,6 +14,11 @@
     <RoadNetwork
       :segments="monitoringStore.segments"
       :meetingZones="monitoringStore.meetingZones"
+      :upstreamQueue="upstreamQueue"
+      :downstreamQueue="downstreamQueue"
+      @updateSegment="handleSegmentUpdate"
+      @updateZone="handleZoneUpdate"
+      @zoneControl="handleZoneControl"
     />
 
     <div class="statistics-section">
@@ -30,6 +35,25 @@
         />
       </div>
     </div>
+
+    <!-- 控制操作日志 -->
+    <div class="control-log-section" v-if="controlLogs.length > 0">
+      <h2 class="section-title">控制操作记录</h2>
+      <div class="control-logs">
+        <div
+          v-for="log in recentControlLogs"
+          :key="log.id"
+          class="control-log-item"
+          :class="`log-${log.type}`"
+        >
+          <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+          <span class="log-content">{{ log.message }}</span>
+          <span class="log-status" :class="`status-${log.status}`">
+            {{ getLogStatusText(log.status) }}
+          </span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -39,9 +63,27 @@ import { useMonitoringStore } from '@/stores/monitoring'
 import { formatTimestamp } from '@/utils/format'
 import RoadNetwork from '@/components/monitoring/RoadNetwork.vue'
 import StatisticsCard from '@/components/monitoring/StatisticsCard.vue'
+import type { Segment, MeetingZoneType } from '@/types/monitoring'
 
 const monitoringStore = useMonitoringStore()
 const isRefreshing = ref(false)
+
+// 模拟排队车辆数据
+const upstreamQueue = ref(3)
+const downstreamQueue = ref(5)
+
+// 控制操作日志
+interface ControlLog {
+  id: number
+  timestamp: Date
+  message: string
+  type: 'zone' | 'segment'
+  status: 'success' | 'failed' | 'pending'
+  zoneId?: number
+  action?: string
+}
+
+const controlLogs = ref<ControlLog[]>([])
 let updateInterval: number | null = null
 
 const statisticsData = computed(() => [
@@ -51,7 +93,7 @@ const statisticsData = computed(() => [
     value: monitoringStore.statistics.totalVehicles,
     unit: '辆',
     trend: 'stable',
-    color: 'blue'
+    color: 'blue',
   },
   {
     key: 'conflictCount',
@@ -59,7 +101,7 @@ const statisticsData = computed(() => [
     value: monitoringStore.statistics.conflictCount,
     unit: '个',
     trend: monitoringStore.statistics.conflictCount > 0 ? 'up' : 'down',
-    color: monitoringStore.statistics.conflictCount > 0 ? 'red' : 'green'
+    color: monitoringStore.statistics.conflictCount > 0 ? 'red' : 'green',
   },
   {
     key: 'passedVehicles',
@@ -67,7 +109,7 @@ const statisticsData = computed(() => [
     value: monitoringStore.statistics.passedVehicles,
     unit: '辆',
     trend: 'up',
-    color: 'green'
+    color: 'green',
   },
   {
     key: 'averageWaitTime',
@@ -75,27 +117,161 @@ const statisticsData = computed(() => [
     value: monitoringStore.statistics.averageWaitTime,
     unit: '秒',
     trend: 'stable',
-    color: 'orange'
-  }
+    color: 'orange',
+  },
+  {
+    key: 'upstreamQueue',
+    title: '上行排队车辆',
+    value: upstreamQueue.value,
+    unit: '辆',
+    trend: 'stable',
+    color: 'purple',
+  },
+  {
+    key: 'downstreamQueue',
+    title: '下行排队车辆',
+    value: downstreamQueue.value,
+    unit: '辆',
+    trend: 'stable',
+    color: 'purple',
+  },
 ])
+
+const recentControlLogs = computed(() => {
+  return controlLogs.value.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 5)
+})
 
 const refreshData = async () => {
   isRefreshing.value = true
-  // 模拟API调用
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  // 这里应该调用实际的API来刷新数据
-  isRefreshing.value = false
+  try {
+    // 模拟API调用
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // 更新排队车辆数据
+    upstreamQueue.value = Math.floor(Math.random() * 8)
+    downstreamQueue.value = Math.floor(Math.random() * 8)
+
+    // 更新统计数据
+    monitoringStore.updateStatistics({
+      totalVehicles: Math.max(
+        0,
+        monitoringStore.statistics.totalVehicles + Math.floor(Math.random() * 3) - 1,
+      ),
+      passedVehicles: monitoringStore.statistics.passedVehicles + Math.floor(Math.random() * 2),
+      averageWaitTime: Math.max(
+        10,
+        monitoringStore.statistics.averageWaitTime + Math.floor(Math.random() * 6) - 3,
+      ),
+    })
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+const handleSegmentUpdate = (data: { id: number; updates: Partial<Segment> }) => {
+  monitoringStore.updateSegment(data.id, data.updates)
+}
+
+const handleZoneUpdate = (data: { id: number; updates: Partial<MeetingZoneType> }) => {
+  monitoringStore.updateMeetingZone(data.id, data.updates)
+}
+
+const handleZoneControl = (data: { zoneId: number; action: string }) => {
+  const actionMap = {
+    release_upstream: '放行上行',
+    release_downstream: '放行下行',
+    prohibit_all: '禁止通行',
+    release_control: '解除控制',
+  }
+
+  const actionText = actionMap[data.action as keyof typeof actionMap] || data.action
+  const zoneName =
+    monitoringStore.meetingZones.find((z) => z.id === data.zoneId)?.name || `会车区${data.zoneId}`
+
+  // 添加控制日志
+  const newLog: ControlLog = {
+    id: Date.now(),
+    timestamp: new Date(),
+    message: `对 ${zoneName} 执行 "${actionText}" 操作`,
+    type: 'zone',
+    status: 'pending',
+    zoneId: data.zoneId,
+    action: data.action,
+  }
+
+  controlLogs.value.unshift(newLog)
+
+  // 模拟操作执行
+  setTimeout(() => {
+    const log = controlLogs.value.find((l) => l.id === newLog.id)
+    if (log) {
+      log.status = Math.random() > 0.1 ? 'success' : 'failed'
+      if (log.status === 'success') {
+        log.message += ' - 执行成功'
+      } else {
+        log.message += ' - 执行失败'
+      }
+    }
+  }, 2000)
+
+  // 这里应该调用实际的API来执行控制操作
+  console.log('Zone control:', data)
+}
+
+const formatTime = (timestamp: Date): string => {
+  return timestamp.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+const getLogStatusText = (status: string): string => {
+  switch (status) {
+    case 'success':
+      return '成功'
+    case 'failed':
+      return '失败'
+    case 'pending':
+      return '执行中'
+    default:
+      return '未知'
+  }
 }
 
 // 模拟实时数据更新
 const simulateDataUpdate = () => {
-  // 这里可以添加WebSocket连接或定时API调用
-  // 目前使用模拟数据
-  monitoringStore.updateStatistics({
-    totalVehicles: Math.max(0, monitoringStore.statistics.totalVehicles + Math.floor(Math.random() * 3) - 1),
-    passedVehicles: monitoringStore.statistics.passedVehicles + Math.floor(Math.random() * 2),
-    averageWaitTime: Math.max(10, monitoringStore.statistics.averageWaitTime + Math.floor(Math.random() * 6) - 3)
+  // 随机更新车辆状态
+  const segments = monitoringStore.segments
+  segments.forEach((segment) => {
+    if (Math.random() < 0.1) {
+      // 10% 概率更新
+      monitoringStore.updateSegment(segment.id, {
+        upstreamVehicles: Math.random() > 0.5,
+        downstreamVehicles: Math.random() > 0.5,
+        currentCount: Math.floor(Math.random() * segment.capacity),
+      })
+    }
   })
+
+  // 随机更新统计数据
+  monitoringStore.updateStatistics({
+    totalVehicles: Math.max(
+      0,
+      monitoringStore.statistics.totalVehicles + Math.floor(Math.random() * 3) - 1,
+    ),
+    passedVehicles: monitoringStore.statistics.passedVehicles + Math.floor(Math.random() * 2),
+    averageWaitTime: Math.max(
+      10,
+      monitoringStore.statistics.averageWaitTime + Math.floor(Math.random() * 6) - 3,
+    ),
+  })
+
+  // 随机更新排队数据
+  if (Math.random() < 0.3) {
+    upstreamQueue.value = Math.max(0, upstreamQueue.value + Math.floor(Math.random() * 3) - 1)
+    downstreamQueue.value = Math.max(0, downstreamQueue.value + Math.floor(Math.random() * 3) - 1)
+  }
 }
 
 onMounted(() => {
@@ -168,8 +344,12 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .statistics-section {

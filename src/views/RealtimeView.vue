@@ -180,7 +180,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { formatTimeAgo } from '@/utils/format'
 import { useWebSocket } from '@/services/websocket'
-import type {
+import {
   WebSocketMessage,
   SegmentMessageData,
   TrafficLightMessageData,
@@ -189,7 +189,7 @@ import type {
   Segment,
   //LastVehicleAction,
   Signal,
-  WaitingArea
+  WaitingArea, LastVehicleAction
 } from '@/types/websocket'
 
 // 导入组件
@@ -409,6 +409,29 @@ const handleLaneStatusMessage = (data: LaneStatusMessageData) => {
     segments.value[segmentId].congestionLevel = data.congestionLevel
 
     const totalVehicles = (data.upstreamVehicles?.length || 0) + (data.downstreamVehicles?.length || 0)
+    segments.value[segmentId].vehicleCount = totalVehicles
+    if(data.upstreamVehicles?.length>0) {
+      segments.value[segmentId].direction = 'UPSTREAM';
+      const lastAction: LastVehicleAction = {
+        status: 'VEHICLE_ENTER',
+        vehicleId: data?.upstreamVehicles[0].vehicleId,
+        direction: 'UPSTREAM',
+        timestamp: Date.now()
+      };
+      segments.value[segmentId].lastAction = lastAction
+    }else if(data.downstreamVehicles?.length>0) {
+      segments.value[segmentId].direction = 'DOWNSTREAM';
+      const lastAction: LastVehicleAction = {
+        status: 'VEHICLE_ENTER',
+        vehicleId: data?.downstreamVehicles[0].vehicleId,
+        direction: 'DOWNSTREAM',
+        timestamp: Date.now()
+      };
+      segments.value[segmentId].lastAction = lastAction
+    }else {
+      segments.value[segmentId].direction = null;
+      segments.value[segmentId].lastAction = null;
+    }
     logMessage(`路段 ${segmentId} 状态更新: 车辆${totalVehicles}辆, 拥堵${(data.congestionLevel * 100).toFixed(0)}%`, 'info', 'LANE_STATUS')
   }
 }

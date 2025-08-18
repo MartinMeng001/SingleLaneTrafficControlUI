@@ -152,6 +152,28 @@ watch(() => props.lastVehicleAction, (newAction) => {
   border-radius: 3px;
   z-index: 10;
   animation: vehicle-move 1.5s ease-in-out;
+
+  /* 居中设置 */
+  display: flex;
+  justify-content: center; /* 水平居中 */
+}
+
+/* 上行车辆动画：使用向上的箭头 */
+.vehicle-animation.vehicle-enter.upstream:before {
+  content: '↑'; /* 或者 '⬆️' 等更复杂的符号 */
+  font-size: 10px;
+  color: #ffcccc;
+  display: block;
+  transform: rotate(0deg); /* 确保箭头方向正确 */
+}
+
+/* 下行车辆动画：使用向下的箭头 */
+.vehicle-animation.vehicle-enter.downstream:before {
+  content: '↓'; /* 或者 '⬇️' */
+  font-size: 10px;
+  color: #ffcccc;
+  display: block;
+  transform: rotate(0deg);
 }
 
 .vehicle-animation.vehicle-enter.upstream {

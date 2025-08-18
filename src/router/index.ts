@@ -1,10 +1,11 @@
+// src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/monitoring'
+    redirect: '/realtime'
   },
   {
     path: '/monitoring',
@@ -13,6 +14,24 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '状态监控',
       icon: '📊'
+    }
+  },
+  {
+    path: '/realtime',
+    name: 'Realtime',
+    component: () => import('@/views/RealtimeView.vue'),
+    meta: {
+      title: '实时可视化',
+      icon: '📺'
+    }
+  },
+  {
+    path: '/configuration',
+    name: 'Configuration',
+    component: () => import('@/views/ConfigurationViewV2.vue'),
+    meta: {
+      title: '参数配置',
+      icon: '⚙️'
     }
   },
   {

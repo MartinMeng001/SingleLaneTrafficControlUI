@@ -1,3 +1,5 @@
+import type { PhaseOption } from "@/types"
+
 export const LIGHT_STATES = {
   RED: 'red',
   GREEN: 'green',
@@ -49,3 +51,21 @@ export const WEBSOCKET_EVENTS = {
   SENSOR_HEARTBEAT: 'sensor_heartbeat',
   SYSTEM_ALERT: 'system_alert'
 } as const
+
+export const CONTROL_PHASE_MAP: {[key: string]: string} = {
+  7: '东全放',
+  8: '西全放',
+  9: '南全放',
+  10: '北全放',
+  52: '全红',
+  51: '黄闪',
+} as const
+
+export const CONTROL_PHASES_OPTIONS: PhaseOption[] = [
+  { value: 7, label: '东全放' },
+  { value: 8, label: '西全放' },
+  { value: 9, label: '南全放' },
+  { value: 10, label: '北全放' },
+  { value: 52, label: '全红' },
+  { value: 51, label: '黄闪' },
+] as const

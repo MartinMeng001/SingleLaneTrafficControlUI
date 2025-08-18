@@ -1,6 +1,7 @@
 // src/types/index.ts
 export * from './monitoring'
 export * from './logs'
+export * from './signal.ts'
 
 // 通用类型定义
 export interface BaseResponse<T> {

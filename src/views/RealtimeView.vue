@@ -39,8 +39,7 @@
     <!-- 🚗 新增：车辆全程测试功能面板 -->
     <VehicleTestPanel
       :signals="signals"
-      :can-start-test="canStartTest"
-      @test-log="addTestLog"
+      :initialSignalIds="SIGNAL_IDS"
     />
 
     <div class="traffic-layout">
@@ -294,10 +293,10 @@ const lastUpdateText = computed(() => {
 })
 
 // 🚗 新增：计算是否可以开始测试
-const canStartTest = computed(() => {
-  const startSignalStatus = getSignalStatus('37') // 起点信号机ID 'ALL_RED' | 'YELLOW_FLASH' | 'UPSTREAM' | 'DOWNSTREAM';
-  return ['UPSTREAM'].includes(startSignalStatus)
-})
+// const canStartTest = computed(() => {
+//   const startSignalStatus = getSignalStatus('37') // 起点信号机ID 'ALL_RED' | 'YELLOW_FLASH' | 'UPSTREAM' | 'DOWNSTREAM';
+//   return ['UPSTREAM'].includes(startSignalStatus)
+// })
 
 const filteredLogs = computed(() => {
   return logs.value.filter(log => logFilters.value[log.messageType as keyof typeof logFilters.value])
@@ -305,30 +304,30 @@ const filteredLogs = computed(() => {
 })
 
 // 🚗 新增：添加测试日志的方法
-function addTestLog(message: string, type: LogMessage['type'] = 'info') {
-  const logId = Date.now() + Math.random()
-  const timestamp = new Date().toLocaleTimeString('zh-CN', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-
-  logs.value.push({
-    id: logId,
-    timestamp,
-    message,
-    type,
-    messageType: 'VEHICLE_TEST'
-  })
-
-  // 自动滚动到底部
-  nextTick(() => {
-    if (logPanel.value) {
-      logPanel.value.scrollTop = logPanel.value.scrollHeight
-    }
-  })
-}
+// function addTestLog(message: string, type: LogMessage['type'] = 'info') {
+//   const logId = Date.now() + Math.random()
+//   const timestamp = new Date().toLocaleTimeString('zh-CN', {
+//     hour12: false,
+//     hour: '2-digit',
+//     minute: '2-digit',
+//     second: '2-digit'
+//   })
+//
+//   logs.value.push({
+//     id: logId,
+//     timestamp,
+//     message,
+//     type,
+//     messageType: 'VEHICLE_TEST'
+//   })
+//
+//   // 自动滚动到底部
+//   nextTick(() => {
+//     if (logPanel.value) {
+//       logPanel.value.scrollTop = logPanel.value.scrollHeight
+//     }
+//   })
+// }
 
 // 数据获取方法
 const getSegmentVehicleCount = (segmentId: number) => {

@@ -3,7 +3,6 @@
   <div class="test-control-panel">
     <h3>🚗 车辆全程测试功能</h3>
 
-    <!-- API连接状态 -->
     <div class="api-status" :class="apiStatusClass">
       <div class="status-indicator" :class="{ 'healthy': isApiHealthy, 'unhealthy': !isApiHealthy }"></div>
       <span>API状态: {{ apiStatusText }}</span>
@@ -30,96 +29,81 @@
 
       <div class="test-buttons">
         <button
-          @click="startVehicleTest"
-          :disabled="isTestRunning || !canStartTest || !isApiHealthy"
+          @click="startUpstreamTest"
+          :disabled="isQueueRunning || !canStartUpstreamTest || !isApiHealthy"
           class="start-btn"
         >
-          {{ isTestRunning ? '测试进行中...' : '开始全程测试' }}
+          {{ isQueueRunning ? '测试进行中...' : '开始上行测试' }}
         </button>
 
         <button
-          @click="stopVehicleTest"
-          :disabled="!isTestRunning"
-          class="stop-btn"
+          @click="startDownstreamTest"
+          :disabled="isQueueRunning || !canStartDownstreamTest || !isApiHealthy"
+          class="start-btn"
         >
-          停止测试
+          开始下行测试
         </button>
 
         <button
-          @click="clearTestHistory"
-          class="clear-btn"
-          :disabled="isApiActionRunning"
+          @click="startCombinedTest"
+          :disabled="isQueueRunning || !canStartCombinedTest || !isApiHealthy"
+          class="start-btn combined-btn"
         >
-          清除历史
+          开始上行+下行联合测试
         </button>
 
         <button
-          @click="getApiStatus"
-          class="status-btn"
-          :disabled="isApiActionRunning"
+          @click="cancelTest"
+          :disabled="!isQueueRunning"
+          class="cancel-btn"
         >
-          {{ isApiActionRunning ? '查询中...' : '查询状态' }}
+          取消测试
         </button>
       </div>
     </div>
 
-    <!-- 测试进度显示 -->
-    <div class="test-progress" v-if="isTestRunning || testState === TestState.COMPLETED">
-      <div class="progress-title">测试进度</div>
-      <div class="progress-steps">
+    <div v-if="testQueue.length > 0" class="test-queue-panel">
+      <h4>测试任务队列:</h4>
+      <ul>
+        <li v-for="task in testQueue" :key="task.id" :class="`task-item task-${task.state.toLowerCase()}`">
+          <span>{{ task.name }}</span>
+          <span class="task-status">
+            {{ task.state === TaskState.RUNNING ? '运行中...' : task.state === TaskState.COMPLETED ? '完成' : task.state === TaskState.FAILED ? '失败' : '排队中' }}
+          </span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="test-progress" v-if="testSteps.length > 0">
+      <div class="progress-title">
+        <span class="step-icon">▶️</span>
+        <h4 class="test-step-header">进度跟踪</h4>
+      </div>
+      <div class="progress-steps-container">
         <div
           v-for="step in testSteps"
           :key="step.id"
           class="progress-step"
-          :class="{
-            'completed': step.completed,
-            'active': step.active,
-            'waiting': step.waiting
-          }"
+          :class="{ 'completed': step.completed, 'active': step.active, 'waiting': step.waiting }"
         >
-          <div class="step-icon">{{ step.icon }}</div>
-          <div class="step-text">{{ step.text }}</div>
-          <div class="step-time" v-if="step.timestamp">{{ formatTime(step.timestamp) }}</div>
+          <div class="step-content">
+            <span class="step-icon">{{ step.icon }}</span>
+            <span class="step-text">{{ step.text }}</span>
+          </div>
+          <span v-if="step.timestamp" class="step-time">{{ formatTime(step.timestamp) }}</span>
         </div>
       </div>
     </div>
 
-    <!-- 测试日志 -->
-    <div class="test-logs" v-if="testLogs.length > 0">
+    <div class="test-logs">
       <div class="logs-header">
-        <span class="logs-title">测试日志 (最近{{ Math.min(testLogs.length, 10) }}条)</span>
-        <button @click="exportLogs" class="export-btn" v-if="testLogs.length > 0">
-          📄 导出
-        </button>
+        <h4>日志 <span class="log-count">({{ logs.length }})</span></h4>
+        <button @click="clearLogs" class="clear-btn">清空</button>
       </div>
-      <div class="logs-content">
-        <div
-          v-for="log in testLogs.slice(-10)"
-          :key="log.id"
-          class="log-entry"
-          :class="log.type"
-        >
-          <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+      <div class="logs-content" ref="logsContainer">
+        <div v-for="(log, index) in logs" :key="index" :class="`log-entry log-${log.type}`">
+          <span class="log-timestamp">[{{ formatTime(log.timestamp) }}]</span>
           <span class="log-message">{{ log.message }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- API信息显示 -->
-    <div class="api-info" v-if="apiInfo">
-      <div class="info-title">🔧 API信息</div>
-      <div class="info-content">
-        <div class="info-item">
-          <span class="info-label">功能:</span>
-          <span class="info-value">{{ apiInfo.feature }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">支持路段:</span>
-          <span class="info-value">{{ apiInfo.supported_segments?.join(', ') }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">默认车牌:</span>
-          <span class="info-value">{{ apiInfo.test_license_plate_1 }}, {{ apiInfo.test_license_plate_2 }}</span>
         </div>
       </div>
     </div>
@@ -127,756 +111,669 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import VehicleTestApiService, {
-  ApiHealthChecker,
-  type TestInfoResponse,
+import { ref, computed, onMounted, onUnmounted, watch, defineProps } from 'vue'
+import {
+  VehicleTestApiService,
   //type VehicleEventResponse,
-  type StatusResponse
+  //type StatusResponse,
+  //type EventHistoryItem,
+  ApiHealthChecker
 } from '@/services/vehicleTestApi'
+import { format } from 'date-fns'
+import { TimerManager} from '@/utils/timerManager.ts'
+import { Signal } from '@/types/websocket';
 
-// Props 定义
-interface Props {
-  signals: Record<string, { status: string; description: string; phase: string | null }>
-  canStartTest: boolean
+// ======== 枚举和类型定义 ========
+// 新增: 定义测试模式
+enum TestMode {
+  UPSTREAM = 'upstream',
+  DOWNSTREAM = 'downstream',
 }
 
-// Emits 定义
-interface Emits {
-  (e: 'test-log', message: string, type: 'info' | 'success' | 'warning' | 'error'): void
-}
-
-const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
-
-// 测试状态枚举
-enum TestState {
-  IDLE = 'idle',
+// 新增: 定义测试任务状态
+enum TaskState {
+  PENDING = 'pending',
   RUNNING = 'running',
-  WAITING = 'waiting',
   COMPLETED = 'completed',
-  ERROR = 'error'
+  FAILED = 'failed',
 }
 
-// 车辆位置枚举
-enum VehicleLocation {
-  NONE = 'none',
-  SEGMENT_1 = 'segment_1',
-  WAITING_1 = 'waiting_1',
-  SEGMENT_2 = 'segment_2',
-  WAITING_2 = 'waiting_2',
-  SEGMENT_3 = 'segment_3',
-  WAITING_3 = 'waiting_3',
-  SEGMENT_4 = 'segment_4',
-  COMPLETED = 'completed'
-}
-
-// 测试步骤接口
-interface TestStep {
+// 步骤类型保持不变
+interface Step {
   id: string
   text: string
   icon: string
   completed: boolean
   active: boolean
   waiting: boolean
-  timestamp?: Date
+  timestamp?: number
 }
 
-// 测试日志接口
-interface TestLog {
-  id: number
-  timestamp: Date
-  message: string
-  type: 'info' | 'success' | 'warning' | 'error'
+// 新增: 定义测试任务类型，包含所有测试所需的状态
+interface TestTask {
+  id: string;
+  mode: TestMode;
+  name: string;
+  state: TaskState;
+  vehiclePlate: string;
+  steps: Step[];
+  run: () => Promise<void>;
 }
 
-// 响应式数据
-const testState = ref<TestState>(TestState.IDLE)
-const currentTestVehicle = ref<string>('')
-const currentLocation = ref<VehicleLocation>(VehicleLocation.NONE)
-const testLogs = ref<TestLog[]>([])
-const logIdCounter = ref(0)
+// ======== 响应式状态 ========
+const isTestRunning = ref(false)
+const testState = ref('idle') // idle | running | completed | error | waiting
+const testSteps = ref<Step[]>([]) // 步骤将根据任务动态设置
+const currentTestVehicle = ref('')
+const currentLocation = ref('NONE')
+const logs = ref<{ message: string; type: string; timestamp: number }[]>([])
+const isApiHealthy = ref(false)
+const isCheckingHealth = ref(true)
+const logsContainer = ref<HTMLElement | null>(null)
+//const signalWatchers = ref(new Map<string, Function>())
+const signalWatchers = ref(new Map<string, () => void>())
+//const vehicleHistory = ref<EventHistoryItem[]>([])
+//const canStartTest = ref(false)
+const unsubscribeHealthCheck = ref<(() => void) | null>(null);
 
-// API相关状态
-const isApiHealthy = ref<boolean>(false)
-const isCheckingHealth = ref<boolean>(false)
-const isApiActionRunning = ref<boolean>(false)
-const apiInfo = ref<TestInfoResponse | null>(null)
-const systemStatus = ref<StatusResponse | null>(null)
+// 新增: 任务队列相关状态
+const testQueue = ref<TestTask[]>([]);
+const currentTask = ref<TestTask | null>(null);
+const isQueueRunning = ref(false);
 
-// 定时器引用
-const timeouts = ref<Set<NodeJS.Timeout>>(new Set())
-const intervals = ref<Set<NodeJS.Timer>>(new Set())
+// 定义props
+interface Props {
+  signals: Record<string, Signal>;
+  initialSignalIds: string[]; // 明确声明为字符串数组
+}
 
-// 信号机状态监听
-const signalWatchers = ref<Map<string, () => void>>(new Map())
-
-// 取消健康检查订阅的函数
-let unsubscribeHealthCheck: (() => void) | null = null
-
-// 测试步骤配置
-const testSteps = ref<TestStep[]>([
+const props = defineProps<Props>();
+// ======== 预定义测试步骤常量 ========
+// 新增: 上行测试步骤常量
+const UPSTREAM_STEPS: Step[] = [
   { id: 'start', text: '检查起点信号机状态', icon: '🚦', completed: false, active: false, waiting: false },
   { id: 'segment1_enter', text: '车辆进入路段1', icon: '🚗', completed: false, active: false, waiting: false },
   { id: 'segment1_exit', text: '车辆离开路段1', icon: '➡️', completed: false, active: false, waiting: false },
-  { id: 'waiting1', text: '车辆在等待区1', icon: '⏸️', completed: false, active: false, waiting: false },
+  { id: 'waiting2', text: '车辆在等待区2', icon: '⏸️', completed: false, active: false, waiting: false },
   { id: 'segment2_enter', text: '车辆进入路段2', icon: '🚗', completed: false, active: false, waiting: false },
   { id: 'segment2_exit', text: '车辆离开路段2', icon: '➡️', completed: false, active: false, waiting: false },
-  { id: 'waiting2', text: '车辆在等待区2', icon: '⏸️', completed: false, active: false, waiting: false },
+  { id: 'waiting3', text: '车辆在等待区3', icon: '⏸️', completed: false, active: false, waiting: false },
   { id: 'segment3_enter', text: '车辆进入路段3', icon: '🚗', completed: false, active: false, waiting: false },
   { id: 'segment3_exit', text: '车辆离开路段3', icon: '➡️', completed: false, active: false, waiting: false },
-  { id: 'waiting3', text: '车辆在等待区3', icon: '⏸️', completed: false, active: false, waiting: false },
+  { id: 'waiting4', text: '车辆在等待区4', icon: '⏸️', completed: false, active: false, waiting: false },
   { id: 'segment4_enter', text: '车辆进入路段4', icon: '🚗', completed: false, active: false, waiting: false },
   { id: 'segment4_exit', text: '车辆离开路段4', icon: '✅', completed: false, active: false, waiting: false }
-])
+]
+// 新增: 下行测试步骤常量
+const DOWNSTREAM_STEPS: Step[] = [
+  { id: 'start', text: '检查终点信号机状态', icon: '🚦', completed: false, active: false, waiting: false },
+  { id: 'segment4_enter', text: '车辆进入路段4', icon: '🚗', completed: false, active: false, waiting: false },
+  { id: 'segment4_exit', text: '车辆离开路段4', icon: '➡️', completed: false, active: false, waiting: false },
+  { id: 'waiting3', text: '车辆在等待区3', icon: '⏸️', completed: false, active: false, waiting: false },
+  { id: 'segment3_enter', text: '车辆进入路段3', icon: '🚗', completed: false, active: false, waiting: false },
+  { id: 'segment3_exit', text: '车辆离开路段3', icon: '➡️', completed: false, active: false, waiting: false },
+  { id: 'waiting2', text: '车辆在等待区2', icon: '⏸️', completed: false, active: false, waiting: false },
+  { id: 'segment2_enter', text: '车辆进入路段2', icon: '🚗', completed: false, active: false, waiting: false },
+  { id: 'segment2_exit', text: '车辆离开路段2', icon: '➡️', completed: false, active: false, waiting: false },
+  { id: 'waiting1', text: '车辆在等待区1', icon: '⏸️', completed: false, active: false, waiting: false },
+  { id: 'segment1_enter', text: '车辆进入路段1', icon: '🚗', completed: false, active: false, waiting: false },
+  { id: 'segment1_exit', text: '车辆离开路段1', icon: '✅', completed: false, active: false, waiting: false }
+]
 
-// 计算属性
-const isTestRunning = computed(() =>
-  testState.value === TestState.RUNNING || testState.value === TestState.WAITING
-)
+// ======== 计算属性 ========
+const apiStatusClass = computed(() => isApiHealthy.value ? 'healthy' : 'unhealthy')
+const apiStatusText = computed(() => isApiHealthy.value ? '正常' : '异常')
 
-const testStatusText = computed(() => {
-  switch (testState.value) {
-    case TestState.IDLE: return '空闲'
-    case TestState.RUNNING: return '运行中'
-    case TestState.WAITING: return '等待信号'
-    case TestState.COMPLETED: return '已完成'
-    case TestState.ERROR: return '出错'
-    default: return '未知'
+// 在计算属性部分添加
+const canStartUpstreamTest = computed(() => {
+  // 1. 检查 API 是否健康
+  if (!isApiHealthy.value) {
+    return false;
   }
-})
+
+  // 2. 检查 props.initialSignalIds 数组是否存在且不为空
+  const signalIds = props.initialSignalIds;
+  if (!signalIds || signalIds.length === 0) {
+    // 如果数组为空或不存在，则无法开始测试
+    return false;
+  }
+
+  // 3. 检查起点信号机状态
+  const signal1Status = getSignalStatus(signalIds[0]);
+  return ['UPSTREAM'].includes(signal1Status)
+});
+
+const canStartDownstreamTest = computed(() => {
+  if (!isApiHealthy.value) {
+    return false;
+  }
+
+  const signalIds = props.initialSignalIds;
+  if (!signalIds || signalIds.length === 0) {
+    return false;
+  }
+
+  // 下行测试的起点是终点信号机，所以这里应该是最后一个元素
+  const lastSignalId = signalIds[signalIds.length - 1];
+  const signalStatus = getSignalStatus(lastSignalId);
+  return ['DOWNSTREAM'].includes(signalStatus)
+});
+
+const canStartCombinedTest = computed(() => {
+  return true;
+});
 
 const testStatusClass = computed(() => {
-  switch (testState.value) {
-    case TestState.IDLE: return 'status-idle'
-    case TestState.RUNNING: return 'status-running'
-    case TestState.WAITING: return 'status-waiting'
-    case TestState.COMPLETED: return 'status-completed'
-    case TestState.ERROR: return 'status-error'
-    default: return ''
-  }
+  if (testState.value === 'running') return 'running'
+  if (testState.value === 'completed') return 'completed'
+  if (testState.value === 'error') return 'error'
+  return 'idle'
+})
+
+const testStatusText = computed(() => {
+  if (isTestRunning.value) return '运行中...'
+  if (testState.value === 'completed') return '已完成'
+  if (testState.value === 'error') return '测试失败'
+  if (testState.value === 'waiting') return '等待中...'
+  return '空闲'
 })
 
 const currentVehicleLocation = computed(() => {
   switch (currentLocation.value) {
-    case VehicleLocation.NONE: return '无'
-    case VehicleLocation.SEGMENT_1: return '路段1'
-    case VehicleLocation.WAITING_1: return '等待区1'
-    case VehicleLocation.SEGMENT_2: return '路段2'
-    case VehicleLocation.WAITING_2: return '等待区2'
-    case VehicleLocation.SEGMENT_3: return '路段3'
-    case VehicleLocation.WAITING_3: return '等待区3'
-    case VehicleLocation.SEGMENT_4: return '路段4'
-    case VehicleLocation.COMPLETED: return '已通过'
+    case 'SEGMENT_1': return '路段1'
+    case 'SEGMENT_2': return '路段2'
+    case 'SEGMENT_3': return '路段3'
+    case 'SEGMENT_4': return '路段4'
+    case 'WAITING_1': return '等待区1'
+    case 'WAITING_2': return '等待区2'
+    case 'WAITING_3': return '等待区3'
+    case 'WAITING_4': return '等待区4'
     default: return '未知'
   }
 })
 
-const apiStatusText = computed(() => {
-  return isApiHealthy.value ? '连接正常' : '连接异常'
-})
-
-const apiStatusClass = computed(() => {
-  return isApiHealthy.value ? 'api-healthy' : 'api-unhealthy'
-})
-
-// 添加日志
-function addLog(message: string, type: TestLog['type'] = 'info') {
-  const log: TestLog = {
-    id: ++logIdCounter.value,
-    timestamp: new Date(),
-    message,
-    type
-  }
-
-  testLogs.value.push(log)
-
-  // 同时向父组件发送日志
-  emit('test-log', message, type)
-
-  // 保持日志数量在合理范围内
-  if (testLogs.value.length > 100) {
-    testLogs.value = testLogs.value.slice(-50)
-  }
+// ======== 辅助函数 ========
+function formatTime(timestamp: number) {
+  return format(new Date(timestamp), 'HH:mm:ss')
 }
 
-// 更新测试步骤状态
-function updateStepStatus(stepId: string, status: 'active' | 'completed' | 'waiting') {
-  const step = testSteps.value.find(s => s.id === stepId)
-  if (step) {
-    // 重置所有状态
-    step.active = false
-    step.completed = false
-    step.waiting = false
-
-    // 设置新状态
-    step[status] = true
-
-    if (status === 'completed') {
-      step.timestamp = new Date()
-    }
-  }
-}
-
-// 生成测试车牌号
 function generateTestLicensePlate(): string {
-  const timestamp = Date.now().toString().slice(-6)
-  return `TEST${timestamp}`
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const digits = '0123456789'
+  const plate = Array.from({ length: 2 }, () => letters[Math.floor(Math.random() * letters.length)]).join('')
+    + Array.from({ length: 4 }, () => digits[Math.floor(Math.random() * digits.length)]).join('')
+  return `TEST-${plate}`
 }
 
-// 延迟执行函数
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => {
-    const timeout = setTimeout(resolve, ms)
-    timeouts.value.add(timeout)
-  })
+function updateStepStatus(steps: Step[], id: string, status: 'active' | 'completed' | 'waiting' = 'active') {
+  const step = steps.find(s => s.id === id)
+  if (step) {
+    step.active = status === 'active'
+    step.completed = status === 'completed'
+    step.waiting = status === 'waiting'
+    step.timestamp = Date.now()
+  }
 }
 
-// 清除所有定时器
-function clearAllTimeouts() {
-  timeouts.value.forEach(timeout => clearTimeout(timeout))
-  timeouts.value.clear()
-  intervals.value.forEach(interval => clearInterval(interval as unknown as number))
-  intervals.value.clear()
-  signalWatchers.value.clear()
+function addLog(message: string, type: string) {
+  logs.value.push({ message, type, timestamp: Date.now() })
+  if (logsContainer.value) {
+    logsContainer.value.scrollTop = logsContainer.value.scrollHeight
+  }
 }
 
-// 获取信号机状态
-function getSignalStatus(signalId: string): string {
-  return props.signals[signalId]?.status || 'ALL_RED'
-}
-
-// 检查信号机是否允许上行
-function isSignalAllowingUpstream(signalId: string): boolean {
-  const status = getSignalStatus(signalId)
-  return status === 'UPSTREAM'
-}
-
-function isSignalAllowingDownstream(signalId: string): boolean {
-  const status = getSignalStatus(signalId)
-  return status === 'DOWNSTREAM'
-}
-
-// API相关方法
-async function checkApiHealth(): Promise<void> {
-  if (isCheckingHealth.value) return
-
+async function checkApiHealth() {
   isCheckingHealth.value = true
   try {
     const health = await VehicleTestApiService.checkHealth()
     isApiHealthy.value = health.status === 'UP'
-    addLog(`API健康检查: ${health.status}`, isApiHealthy.value ? 'success' : 'error')
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     isApiHealthy.value = false
-    if(error instanceof Error) {
-      addLog(`API健康检查失败: ${error.message}`, 'error')
-    }
-
+    addLog('API健康检查失败', 'error')
   } finally {
     isCheckingHealth.value = false
   }
 }
 
-async function loadApiInfo(): Promise<void> {
-  try {
-    apiInfo.value = await VehicleTestApiService.getTestInfo()
-    addLog('API信息加载成功', 'success')
-  } catch (error) {
-    if(error instanceof Error) {
-      addLog(`API信息加载失败: ${error.message}`, 'error')
-    }
-
-  }
+function getSignalStatus(signalId: string): string {
+  return props.signals[signalId]?.status || 'ALL_RED';
 }
 
-async function getApiStatus(): Promise<void> {
-  if (isApiActionRunning.value) return
+function isSignalAllowingUpstream(signalId: string): boolean {
+  //return getSignalStatus(signalId) === 'UPSTREAM'
+  return ['UPSTREAM'].includes(getSignalStatus(signalId))
+}
 
-  isApiActionRunning.value = true
-  try {
-    systemStatus.value = await VehicleTestApiService.getSystemStatus()
-    addLog(`系统状态: ${systemStatus.value.status}, 已触发事件: ${systemStatus.value.totalTriggeredEvents}`, 'info')
-  } catch (error) {
-    if(error instanceof Error) {
-      addLog(`获取系统状态失败: ${error.message}`, 'error')
+function isSignalAllowingDownstream(signalId: string): boolean {
+  //return getSignalStatus(signalId) === 'DOWNSTREAM'
+  return ['DOWNSTREAM'].includes(getSignalStatus(signalId))
+}
+
+function watchSignalChange(signalId: string, callback: () => void, mode: TestMode) {
+  addLog(`DEBUG: 开始监听信号机 ${signalId}, 监听模式: ${mode}`, 'info');
+  if (signalWatchers.value.has(signalId)) {
+    // 如果已经有watcher在监听，先停止
+    signalWatchers.value.get(signalId)!();
+    addLog(`DEBUG: 停止旧的对信号机 ${signalId} 的监听`, 'warning');
+  }
+
+  const checkInterval = setInterval(() => {
+    addLog(`DEBUG: 正在检查信号机 ${signalId} 的状态...`, 'info');
+
+    let signalAllowed = false;
+    if (mode === TestMode.UPSTREAM) {
+      signalAllowed = isSignalAllowingUpstream(signalId)
+    } else {
+      signalAllowed = isSignalAllowingDownstream(signalId)
     }
 
+    if (signalAllowed) {
+      clearInterval(checkInterval);
+      signalWatchers.value.delete(signalId);
+      addLog(`检测到信号机${signalId}状态变为${mode === TestMode.UPSTREAM ? '允许上行' : '允许下行'}`, 'success');
+      callback();
+    }
+  }, 2000);
+
+  // 提供一个停止监听的函数
+  const stopWatching = () => {
+    addLog(`DEBUG: 外部请求停止对信号机 ${signalId} 的监听`, 'info');
+    clearInterval(checkInterval);
+  }
+  signalWatchers.value.set(signalId, stopWatching);
+}
+
+// 清空日志
+function clearLogs() {
+  logs.value = []
+}
+
+// 取消测试
+function cancelTest() {
+  isQueueRunning.value = false;
+  testQueue.value = [];
+  testState.value = 'idle';
+  currentTestVehicle.value = '';
+  currentTask.value = null;
+  addLog('测试已取消', 'warning');
+}
+
+// ======== 重构后的核心函数 ========
+
+/**
+ * 核心测试执行器
+ * 负责从任务队列中按序执行任务，或者并行执行联合任务
+ */
+async function runTestQueue() {
+  if (isQueueRunning.value) return;
+
+  isQueueRunning.value = true;
+  testState.value = 'running';
+  currentTestVehicle.value = testQueue.value.length === 1 ? testQueue.value[0].vehiclePlate : '联合测试';
+
+  addLog(`开始执行测试任务队列，测试车辆: ${currentTestVehicle.value}`, 'info');
+
+  const tasksToRun = testQueue.value.map(task => {
+    if (testQueue.value.length === 1) {
+      testSteps.value = task.steps;
+      currentTask.value = task;
+    }
+
+    // **核心修改：直接调用 task.run()，不传递参数**
+    return (async () => {
+      task.state = TaskState.RUNNING;
+      try {
+        addLog(`开始执行任务: ${task.name}，车辆: ${task.vehiclePlate}`, 'info');
+        await task.run();
+        task.state = TaskState.COMPLETED;
+        addLog(`任务完成: ${task.name}`, 'success');
+      } catch (error) {
+        task.state = TaskState.FAILED;
+        if (error instanceof Error) {
+          addLog(`任务失败: ${task.name} - ${error.message}`, 'error');
+        }
+        throw error;
+      }
+    })();
+  });
+
+  try {
+    await Promise.all(tasksToRun);
+    testState.value = 'completed';
+    addLog('所有测试任务已完成', 'info');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (error) {
+    testState.value = 'error';
+    addLog('一个或多个测试任务失败，联合测试终止', 'error');
   } finally {
-    isApiActionRunning.value = false
+    isQueueRunning.value = false;
+    currentTask.value = null;
+    testQueue.value = [];
   }
 }
 
-// 开始车辆测试
-async function startVehicleTest() {
-  if (!props.canStartTest) {
-    addLog('起点信号机不允许上行，无法开始测试', 'warning')
-    return
-  }
-
-  if (!isApiHealthy.value) {
-    addLog('API连接异常，无法开始测试', 'error')
-    return
-  }
+/**
+ * 封装上行测试的核心逻辑
+ */
+/**
+ * 封装上行测试的核心逻辑
+ */
+async function executeUpstreamTest(signalIds: string[], steps: Step[], vehiclePlate: string) {
+  //if (!currentTask.value) return;
+  //const steps = currentTask.value.steps;
 
   try {
-    // 重置状态
-    testState.value = TestState.RUNNING
-    currentTestVehicle.value = generateTestLicensePlate()
-    currentLocation.value = VehicleLocation.NONE
-
-    // 重置步骤状态
-    testSteps.value.forEach(step => {
-      step.completed = false
-      step.active = false
-      step.waiting = false
-      step.timestamp = undefined
-    })
-
-    addLog(`开始全程测试，测试车辆: ${currentTestVehicle.value}`, 'info')
-
-    // 步骤1: 检查起点信号机
-    updateStepStatus('start', 'completed')
-    addLog('起点信号机允许上行，开始测试', 'success')
+    // 步骤1: 检查起点信号机状态
+    if (!isSignalAllowingUpstream(signalIds[0])) {
+      updateStepStatus(steps, 'start', 'waiting');
+      addLog('起点信号机不允许上行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[0], () => resolve(), TestMode.UPSTREAM);
+      });
+    }
+    updateStepStatus(steps, 'start', 'completed');
+    addLog('起点信号机允许上行，开始测试', 'success');
 
     // 步骤2: 车辆进入路段1
-    await executeVehicleEnterSegment1()
+    updateStepStatus(steps, 'segment1_enter', 'active');
+    const enter1Response = await VehicleTestApiService.vehicleEnterUpstream(1, vehiclePlate);
+    updateStepStatus(steps, 'segment1_enter', 'completed');
+    currentLocation.value = 'SEGMENT_1';
+    addLog(`车辆成功进入路段1: ${enter1Response.message}`, 'success');
+    await delay(10000); // 停留10秒
+
+    // 步骤3: 车辆离开路段1
+    updateStepStatus(steps, 'segment1_exit', 'active');
+    const exit1Response = await VehicleTestApiService.vehicleExitUpstream(1, vehiclePlate);
+    updateStepStatus(steps, 'segment1_exit', 'completed');
+    currentLocation.value = 'WAITING_2';
+    updateStepStatus(steps, 'waiting2', 'completed');
+    addLog(`车辆离开路段1，进入等待区2: ${exit1Response.message}`, 'success');
+
+    // 步骤4: 检查信号机2并进入路段2
+    updateStepStatus(steps, 'segment2_enter', 'active');
+    if (!isSignalAllowingUpstream(signalIds[1])) { // 检查信号机2
+      updateStepStatus(steps, 'segment2_enter', 'waiting');
+      addLog('信号机2不允许上行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[1], () => resolve(), TestMode.UPSTREAM);
+      });
+    }
+    const enter2Response = await VehicleTestApiService.vehicleEnterUpstream(2, vehiclePlate);
+    updateStepStatus(steps, 'segment2_enter', 'completed');
+    currentLocation.value = 'SEGMENT_2';
+    addLog(`车辆成功进入路段2: ${enter2Response.message}`, 'success');
+    await delay(10000);
+
+    // 步骤5: 车辆离开路段2
+    updateStepStatus(steps, 'segment2_exit', 'active');
+    const exit2Response = await VehicleTestApiService.vehicleExitUpstream(2, vehiclePlate);
+    updateStepStatus(steps, 'segment2_exit', 'completed');
+    currentLocation.value = 'WAITING_3';
+    updateStepStatus(steps, 'waiting3', 'completed');
+    addLog(`车辆离开路段2，进入等待区3: ${exit2Response.message}`, 'success');
+
+    // 步骤6: 检查信号机3并进入路段3
+    updateStepStatus(steps, 'segment3_enter', 'active');
+    if (!isSignalAllowingUpstream(signalIds[2])) { // 检查信号机3
+      updateStepStatus(steps, 'segment3_enter', 'waiting');
+      addLog('信号机3不允许上行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[2], () => resolve(), TestMode.UPSTREAM);
+      });
+    }
+    const enter3Response = await VehicleTestApiService.vehicleEnterUpstream(3, vehiclePlate);
+    updateStepStatus(steps, 'segment3_enter', 'completed');
+    currentLocation.value = 'SEGMENT_3';
+    addLog(`车辆成功进入路段3: ${enter3Response.message}`, 'success');
+    await delay(10000);
+
+    // 步骤7: 车辆离开路段3
+    updateStepStatus(steps, 'segment3_exit', 'active');
+    const exit3Response = await VehicleTestApiService.vehicleExitUpstream(3, vehiclePlate);
+    updateStepStatus(steps, 'segment3_exit', 'completed');
+    currentLocation.value = 'WAITING_4';
+    updateStepStatus(steps, 'waiting4', 'completed');
+    addLog(`车辆离开路段3，进入等待区4: ${exit3Response.message}`, 'success');
+
+    // 步骤8: 检查信号机4并进入路段4
+    updateStepStatus(steps, 'segment4_enter', 'active');
+    if (!isSignalAllowingUpstream(signalIds[3])) { // 检查信号机4
+      updateStepStatus(steps, 'segment4_enter', 'waiting');
+      addLog('信号机4不允许上行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[3], () => resolve(), TestMode.UPSTREAM);
+      });
+    }
+    const enter4Response = await VehicleTestApiService.vehicleEnterUpstream(4, vehiclePlate);
+    updateStepStatus(steps, 'segment4_enter', 'completed');
+    currentLocation.value = 'SEGMENT_4';
+    addLog(`车辆成功进入路段4: ${enter4Response.message}`, 'success');
+    await delay(10000);
+
+    // 步骤9: 车辆离开路段4，测试结束
+    updateStepStatus(steps, 'segment4_exit', 'active');
+    const exit4Response = await VehicleTestApiService.vehicleExitUpstream(4, vehiclePlate);
+    updateStepStatus(steps, 'segment4_exit', 'completed');
+    currentLocation.value = 'NONE';
+    addLog(`车辆离开路段4，上行测试完成: ${exit4Response.message}`, 'success');
 
   } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`测试启动失败: ${error.message}`, 'error')
+    testState.value = 'error';
+    if (error instanceof Error) {
+      addLog(`上行测试失败: ${error.message}`, 'error');
     }
-
+    throw error; // 抛出错误以停止任务队列
   }
 }
 
-// 执行车辆进入路段1
-async function executeVehicleEnterSegment1() {
-  if (testState.value === TestState.ERROR) return
-
-  updateStepStatus('segment1_enter', 'active')
+/**
+ * 封装下行测试的核心逻辑
+ */
+async function executeDownstreamTest(signalIds: string[], steps: Step[], vehiclePlate: string) {
+  //if (!currentTask.value) return;
+  //const steps = currentTask.value.steps;
 
   try {
-    const response = await VehicleTestApiService.vehicleEnterUpstream(1, currentTestVehicle.value)
+    // 步骤1: 检查终点信号机状态
+    if (!isSignalAllowingDownstream(signalIds[4])) {
+      updateStepStatus(steps, 'start', 'waiting');
+      addLog('终点信号机不允许下行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[4], () => resolve(), TestMode.DOWNSTREAM);
+      });
+    }
+    updateStepStatus(steps, 'start', 'completed');
+    addLog('终点信号机允许下行，开始测试', 'success');
 
-    updateStepStatus('segment1_enter', 'completed')
-    currentLocation.value = VehicleLocation.SEGMENT_1
-    addLog(`车辆成功进入路段1: ${response.message}`, 'success')
+    // 步骤2: 车辆进入路段4
+    updateStepStatus(steps, 'segment4_enter', 'active');
+    const enter4Response = await VehicleTestApiService.vehicleEnterDownstream(4, vehiclePlate);
+    updateStepStatus(steps, 'segment4_enter', 'completed');
+    currentLocation.value = 'SEGMENT_4';
+    addLog(`车辆成功进入路段4（下行）: ${enter4Response.message}`, 'success');
+    await delay(10000);
 
-    // 10秒后车辆离开路段1
-    updateStepStatus('segment1_exit', 'waiting')
-    addLog('等待10秒后车辆离开路段1...', 'info')
+    // 步骤3: 车辆离开路段4
+    updateStepStatus(steps, 'segment4_exit', 'active');
+    const exit4Response = await VehicleTestApiService.vehicleExitDownstream(4, vehiclePlate);
+    updateStepStatus(steps, 'segment4_exit', 'completed');
+    currentLocation.value = 'WAITING_3';
+    updateStepStatus(steps, 'waiting3', 'completed');
+    addLog(`车辆离开路段4，进入等待区3: ${exit4Response.message}`, 'success');
 
-    await delay(10000)
+    // 步骤4: 检查信号机3并进入路段3
+    updateStepStatus(steps, 'segment3_enter', 'active');
+    if (!isSignalAllowingDownstream(signalIds[3])) { // 检查信号机3
+      updateStepStatus(steps, 'segment3_enter', 'waiting');
+      addLog('信号机3不允许下行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[3], () => resolve(), TestMode.DOWNSTREAM);
+      });
+    }
+    const enter3Response = await VehicleTestApiService.vehicleEnterDownstream(3, vehiclePlate);
+    updateStepStatus(steps, 'segment3_enter', 'completed');
+    currentLocation.value = 'SEGMENT_3';
+    addLog(`车辆成功进入路段3（下行）: ${enter3Response.message}`, 'success');
+    await delay(10000);
 
-    //if (testState.value !== TestState.ERROR) {
-      await executeVehicleExitSegment1()
-    //}
+    // 步骤5: 车辆离开路段3
+    updateStepStatus(steps, 'segment3_exit', 'active');
+    const exit3Response = await VehicleTestApiService.vehicleExitDownstream(3, vehiclePlate);
+    updateStepStatus(steps, 'segment3_exit', 'completed');
+    currentLocation.value = 'WAITING_2';
+    updateStepStatus(steps, 'waiting2', 'completed');
+    addLog(`车辆离开路段3，进入等待区2: ${exit3Response.message}`, 'success');
+
+    // 步骤6: 检查信号机2并进入路段2
+    updateStepStatus(steps, 'segment2_enter', 'active');
+    if (!isSignalAllowingDownstream(signalIds[2])) { // 检查信号机2
+      updateStepStatus(steps, 'segment2_enter', 'waiting');
+      addLog('信号机2不允许下行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[2], () => resolve(), TestMode.DOWNSTREAM);
+      });
+    }
+    const enter2Response = await VehicleTestApiService.vehicleEnterDownstream(2, vehiclePlate);
+    updateStepStatus(steps, 'segment2_enter', 'completed');
+    currentLocation.value = 'SEGMENT_2';
+    addLog(`车辆成功进入路段2（下行）: ${enter2Response.message}`, 'success');
+    await delay(10000);
+
+    // 步骤7: 车辆离开路段2
+    updateStepStatus(steps, 'segment2_exit', 'active');
+    const exit2Response = await VehicleTestApiService.vehicleExitDownstream(2, vehiclePlate);
+    updateStepStatus(steps, 'segment2_exit', 'completed');
+    currentLocation.value = 'WAITING_1';
+    updateStepStatus(steps, 'waiting1', 'completed');
+    addLog(`车辆离开路段2，进入等待区1: ${exit2Response.message}`, 'success');
+
+    // 步骤8: 检查信号机1并进入路段1
+    updateStepStatus(steps, 'segment1_enter', 'active');
+    if (!isSignalAllowingDownstream(signalIds[1])) { // 检查信号机1
+      updateStepStatus(steps, 'segment1_enter', 'waiting');
+      addLog('信号机1不允许下行，等待信号变化...', 'warning');
+      await new Promise<void>((resolve) => {
+        watchSignalChange(signalIds[1], () => resolve(), TestMode.DOWNSTREAM);
+      });
+    }
+    const enter1Response = await VehicleTestApiService.vehicleEnterDownstream(1, vehiclePlate);
+    updateStepStatus(steps, 'segment1_enter', 'completed');
+    currentLocation.value = 'SEGMENT_1';
+    addLog(`车辆成功进入路段1（下行）: ${enter1Response.message}`, 'success');
+    await delay(10000);
+
+    // 步骤9: 车辆离开路段1，测试结束
+    updateStepStatus(steps, 'segment1_exit', 'active');
+    const exit1Response = await VehicleTestApiService.vehicleExitDownstream(1, vehiclePlate);
+    updateStepStatus(steps, 'segment1_exit', 'completed');
+    currentLocation.value = 'NONE';
+    addLog(`车辆离开路段1，下行测试完成: ${exit1Response.message}`, 'success');
 
   } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆进入路段1失败: ${error.message}`, 'error')
+    testState.value = 'error';
+    if (error instanceof Error) {
+      addLog(`下行测试失败: ${error.message}`, 'error');
     }
+    throw error; // 抛出错误以停止任务队列
   }
 }
 
-// 执行车辆离开路段1
-async function executeVehicleExitSegment1() {
-  if (testState.value === TestState.ERROR) return
-
-  updateStepStatus('segment1_exit', 'active')
-
-  try {
-    const response = await VehicleTestApiService.vehicleExitUpstream(1, currentTestVehicle.value)
-
-    updateStepStatus('segment1_exit', 'completed')
-    currentLocation.value = VehicleLocation.WAITING_1
-    updateStepStatus('waiting1', 'completed')
-    addLog(`车辆离开路段1，进入等待区1: ${response.message}`, 'success')
-
-    // 检查信号机2状态
-    await checkSignal2AndProceed()
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆离开路段1失败: ${error.message}`, 'error')
-    }
-  }
+// 辅助函数: 延迟
+function delay(ms: number) {
+  return new Promise(resolve => TimerManager.set(resolve, ms))
 }
 
-// 检查信号机2状态并决定下一步
-async function checkSignal2AndProceed() {
-  if (testState.value === TestState.ERROR) return
+// ======== 启动函数 ========
+/**
+ * 启动单一上行测试
+ */
+function startUpstreamTest() {
+  const vehiclePlate = generateTestLicensePlate();
+  addLog(`上行测试启动，车辆: ${vehiclePlate}`, 'info');
 
-  if (isSignalAllowingUpstream('38')) { // 信号机2 ID
-    addLog('信号机2允许上行，车辆继续前进', 'success')
-    await executeVehicleEnterSegment2()
-  } else {
-    testState.value = TestState.WAITING
-    updateStepStatus('segment2_enter', 'waiting')
-    addLog('信号机2不允许上行，等待信号变化...', 'warning')
+  const upstreamTask: TestTask = {
+    id: `upstream-${Date.now()}`,
+    mode: TestMode.UPSTREAM,
+    name: '上行测试',
+    state: TaskState.PENDING,
+    vehiclePlate: vehiclePlate, // 设置上行车辆牌照
+    steps: JSON.parse(JSON.stringify(UPSTREAM_STEPS)),
+    run: () => executeUpstreamTest(props.initialSignalIds, upstreamTask.steps, upstreamTask.vehiclePlate),
+  };
+  testQueue.value = [upstreamTask];
+  runTestQueue();
+}
+/**
+ * 启动单一下行测试
+ */
+function startDownstreamTest() {
+  const vehiclePlate = generateTestLicensePlate();
+  addLog(`下行测试启动，车辆: ${vehiclePlate}`, 'info');
 
-    watchSignalChange('38', () => executeVehicleEnterSegment2())
-  }
+  const downstreamTask: TestTask = {
+    id: `downstream-${Date.now()}`,
+    mode: TestMode.DOWNSTREAM,
+    name: '下行测试',
+    state: TaskState.PENDING,
+    vehiclePlate: vehiclePlate, // 设置下行车辆牌照
+    steps: JSON.parse(JSON.stringify(DOWNSTREAM_STEPS)),
+    run: () => executeDownstreamTest(props.initialSignalIds, downstreamTask.steps, downstreamTask.vehiclePlate),
+  };
+  testQueue.value = [downstreamTask];
+  runTestQueue();
 }
 
-// 执行车辆进入路段2
-async function executeVehicleEnterSegment2() {
-  if (testState.value === TestState.ERROR) return
+/**
+ * 启动联合测试 (占位符，待实现)
+ */
+/**
+ * 启动联合测试
+ */
+function startCombinedTest() {
+  const upstreamVehiclePlate = generateTestLicensePlate();
+  const downstreamVehiclePlate = generateTestLicensePlate();
 
-  testState.value = TestState.RUNNING
-  updateStepStatus('segment2_enter', 'active')
+  addLog(`联合测试启动，上行车辆: ${upstreamVehiclePlate}，下行车辆: ${downstreamVehiclePlate}`, 'info');
 
-  try {
-    const response = await VehicleTestApiService.vehicleEnterUpstream(2, currentTestVehicle.value)
+  const upstreamTask: TestTask = {
+    id: `upstream-${Date.now()}`,
+    mode: TestMode.UPSTREAM,
+    name: '上行测试',
+    state: TaskState.PENDING,
+    vehiclePlate: upstreamVehiclePlate, // 这里设置上行车辆牌照
+    steps: JSON.parse(JSON.stringify(UPSTREAM_STEPS)),
+    run: () => executeUpstreamTest(props.initialSignalIds, upstreamTask.steps, upstreamTask.vehiclePlate),
+  };
 
-    updateStepStatus('segment2_enter', 'completed')
-    currentLocation.value = VehicleLocation.SEGMENT_2
-    addLog(`车辆成功进入路段2: ${response.message}`, 'success')
+  const downstreamTask: TestTask = {
+    id: `downstream-${Date.now()}`,
+    mode: TestMode.DOWNSTREAM,
+    name: '下行测试',
+    state: TaskState.PENDING,
+    vehiclePlate: downstreamVehiclePlate, // 这里设置下行车辆牌照
+    steps: JSON.parse(JSON.stringify(DOWNSTREAM_STEPS)),
+    run: () => executeDownstreamTest(props.initialSignalIds, downstreamTask.steps, downstreamTask.vehiclePlate),
+  };
 
-    updateStepStatus('segment2_exit', 'waiting')
-    addLog('等待10秒后车辆离开路段2...', 'info')
-
-    await delay(10000)
-
-    //if (testState.value !== TestState.ERROR) {
-      await executeVehicleExitSegment2()
-    //}
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆进入路段2失败: ${error.message}`, 'error')
-    }
-
-  }
+  testQueue.value = [upstreamTask, downstreamTask];
+  runTestQueue();
 }
 
-// 执行车辆离开路段2
-async function executeVehicleExitSegment2() {
-  if (testState.value === TestState.ERROR) return
-
-  updateStepStatus('segment2_exit', 'active')
-
-  try {
-    const response = await VehicleTestApiService.vehicleExitUpstream(2, currentTestVehicle.value)
-
-    updateStepStatus('segment2_exit', 'completed')
-    currentLocation.value = VehicleLocation.WAITING_2
-    updateStepStatus('waiting2', 'completed')
-    addLog(`车辆离开路段2，进入等待区2: ${response.message}`, 'success')
-
-    // 检查信号机3状态
-    await checkSignal3AndProceed()
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆离开路段2失败: ${error.message}`, 'error')
-    }
-
-  }
-}
-
-// 检查信号机3状态并决定下一步
-async function checkSignal3AndProceed() {
-  if (testState.value === TestState.ERROR) return
-
-  if (isSignalAllowingUpstream('41')) { // 信号机3 ID
-    addLog('信号机3允许上行，车辆继续前进', 'success')
-    await executeVehicleEnterSegment3()
-  } else {
-    testState.value = TestState.WAITING
-    updateStepStatus('segment3_enter', 'waiting')
-    addLog('信号机3不允许上行，等待信号变化...', 'warning')
-
-    watchSignalChange('41', () => executeVehicleEnterSegment3())
-  }
-}
-
-// 执行车辆进入路段3
-async function executeVehicleEnterSegment3() {
-  if (testState.value === TestState.ERROR) return
-
-  testState.value = TestState.RUNNING
-  updateStepStatus('segment3_enter', 'active')
-
-  try {
-    const response = await VehicleTestApiService.vehicleEnterUpstream(3, currentTestVehicle.value)
-
-    updateStepStatus('segment3_enter', 'completed')
-    currentLocation.value = VehicleLocation.SEGMENT_3
-    addLog(`车辆成功进入路段3: ${response.message}`, 'success')
-
-    updateStepStatus('segment3_exit', 'waiting')
-    addLog('等待10秒后车辆离开路段3...', 'info')
-
-    await delay(10000)
-
-    //if (testState.value !== TestState.ERROR) {
-      await executeVehicleExitSegment3()
-    //}
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆进入路段3失败: ${error.message}`, 'error')
-    }
-
-  }
-}
-
-// 执行车辆离开路段3
-async function executeVehicleExitSegment3() {
-  if (testState.value === TestState.ERROR) return
-
-  updateStepStatus('segment3_exit', 'active')
-
-  try {
-    const response = await VehicleTestApiService.vehicleExitUpstream(3, currentTestVehicle.value)
-
-    updateStepStatus('segment3_exit', 'completed')
-    currentLocation.value = VehicleLocation.WAITING_3
-    updateStepStatus('waiting3', 'completed')
-    addLog(`车辆离开路段3，进入等待区3: ${response.message}`, 'success')
-
-    // 检查信号机4状态
-    await checkSignal4AndProceed()
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆离开路段3失败: ${error.message}`, 'error')
-    }
-
-  }
-}
-
-// 检查信号机4状态并决定下一步
-async function checkSignal4AndProceed() {
-  if (testState.value === TestState.ERROR) return
-
-  if (isSignalAllowingUpstream('42')) { // 信号机4 ID
-    addLog('信号机4允许上行，车辆继续前进', 'success')
-    await executeVehicleEnterSegment4()
-  } else {
-    testState.value = TestState.WAITING
-    updateStepStatus('segment4_enter', 'waiting')
-    addLog('信号机4不允许上行，等待信号变化...', 'warning')
-
-    watchSignalChange('42', () => executeVehicleEnterSegment4())
-  }
-}
-
-// 执行车辆进入路段4
-async function executeVehicleEnterSegment4() {
-  if (testState.value === TestState.ERROR) return
-
-  testState.value = TestState.RUNNING
-  updateStepStatus('segment4_enter', 'active')
-
-  try {
-    const response = await VehicleTestApiService.vehicleEnterUpstream(4, currentTestVehicle.value)
-
-    updateStepStatus('segment4_enter', 'completed')
-    currentLocation.value = VehicleLocation.SEGMENT_4
-    addLog(`车辆成功进入路段4: ${response.message}`, 'success')
-
-    updateStepStatus('segment4_exit', 'waiting')
-    addLog('等待10秒后车辆离开路段4...', 'info')
-
-    await delay(10000)
-
-    //if (testState.value !== TestState.ERROR) {
-      await executeVehicleExitSegment4()
-    //}
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆进入路段4失败: ${error.message}`, 'error')
-    }
-
-  }
-}
-
-// 执行车辆离开路段4
-async function executeVehicleExitSegment4() {
-  if (testState.value === TestState.ERROR) return
-
-  updateStepStatus('segment4_exit', 'active')
-
-  try {
-    const response = await VehicleTestApiService.vehicleExitUpstream(4, currentTestVehicle.value)
-
-    updateStepStatus('segment4_exit', 'completed')
-    currentLocation.value = VehicleLocation.COMPLETED
-    testState.value = TestState.COMPLETED
-    addLog(`🎉 车辆成功离开路段4，全程测试完成！响应: ${response.message}`, 'success')
-
-  } catch (error) {
-    testState.value = TestState.ERROR
-    if(error instanceof Error) {
-      addLog(`车辆离开路段4失败: ${error.message}`, 'error')
-    }
-
-  }
-}
-
-// 监听信号机状态变化
-function watchSignalChange(signalId: string, callback: () => void) {
-  // 清除可能存在的旧监听器
-  if (signalWatchers.value.has(signalId)) {
-    signalWatchers.value.delete(signalId)
-  }
-
-  // 设置新的监听器
-  const checkInterval = setInterval(() => {
-    if (testState.value === TestState.ERROR || testState.value === TestState.IDLE) {
-      clearInterval(checkInterval)
-      signalWatchers.value.delete(signalId)
-      return
-    }
-
-    if (isSignalAllowingUpstream(signalId)) {
-      clearInterval(checkInterval)
-      signalWatchers.value.delete(signalId)
-      addLog(`信号机${signalId}状态变为允许上行`, 'success')
-      callback()
-    }
-  }, 2000) // 每2秒检查一次
-
-  // 将定时器添加到集合中以便清理
-  intervals.value.add(checkInterval)
-  signalWatchers.value.set(signalId, callback)
-}
-
-// 停止测试
-function stopVehicleTest() {
-  const wasRunning = isTestRunning.value
-
-  testState.value = TestState.IDLE
-  currentTestVehicle.value = ''
-  currentLocation.value = VehicleLocation.NONE
-  clearAllTimeouts()
-
-  // 重置步骤状态
-  testSteps.value.forEach(step => {
-    step.completed = false
-    step.active = false
-    step.waiting = false
-    step.timestamp = undefined
-  })
-
-  if (wasRunning) {
-    addLog('测试已停止', 'warning')
-  }
-}
-
-// 清除测试历史
-async function clearTestHistory() {
-  if (isApiActionRunning.value) return
-
-  isApiActionRunning.value = true
-  try {
-    const response = await VehicleTestApiService.clearEventHistory()
-    testLogs.value = []
-    logIdCounter.value = 0
-    addLog(`API历史已清除: ${response.message} (${response.clearedCount}条记录)`, 'success')
-  } catch (error) {
-    if(error instanceof Error) {
-      addLog(`清除API历史失败: ${error.message}`, 'error')
-    }
-
-  } finally {
-    isApiActionRunning.value = false
-  }
-}
-
-// 导出日志
-function exportLogs() {
-  try {
-    const logsData = testLogs.value.map(log => ({
-      时间: formatTime(log.timestamp),
-      类型: log.type.toUpperCase(),
-      消息: log.message
-    }))
-
-    const csvContent = [
-      ['时间', '类型', '消息'].join(','),
-      ...logsData.map(log => [
-        `"${log.时间}"`,
-        `"${log.类型}"`,
-        `"${log.消息}"`
-      ].join(','))
-    ].join('\n')
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-
-    link.setAttribute('href', url)
-    link.setAttribute('download', `车辆测试日志_${new Date().toISOString().slice(0, 10)}.csv`)
-    link.style.visibility = 'hidden'
-
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    addLog('日志导出成功', 'success')
-  } catch (error) {
-    if(error instanceof Error) {
-      addLog(`日志导出失败: ${error.message}`, 'error')
-    }
-
-  }
-}
-
-// 格式化时间
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('zh-CN', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-}
-
-// 监听 props 变化
-watch(() => props.signals, (newSignals, oldSignals) => {
-  // 检查信号机状态变化，触发等待中的回调
-  for (const [signalId, callback] of signalWatchers.value) {
-    const oldStatus = oldSignals?.[signalId]?.status
-    const newStatus = newSignals[signalId]?.status
-
-    if (oldStatus !== newStatus && isSignalAllowingUpstream(signalId)) {
-      signalWatchers.value.delete(signalId)
-      addLog(`检测到信号机${signalId}状态变化: ${oldStatus} → ${newStatus}`, 'info')
-      callback()
-    }
-  }
-}, { deep: true })
-
-// 组件生命周期
+// ======== 生命周期钩子 ========
 onMounted(async () => {
-  // 启动API健康检查
-  ApiHealthChecker.startHealthCheck(30000) // 30秒检查一次
+  // 启动后台持续检查
+  ApiHealthChecker.startHealthCheck(30000)
 
-  // 订阅健康状态变化
-  unsubscribeHealthCheck = ApiHealthChecker.onHealthChange((healthy) => {
+  // 订阅健康状态变化，并将取消订阅函数保存起来
+  unsubscribeHealthCheck.value = ApiHealthChecker.onHealthChange((healthy) => {
     isApiHealthy.value = healthy
     addLog(`API健康状态变化: ${healthy ? '健康' : '异常'}`, healthy ? 'success' : 'error')
   })
 
-  // 初始健康检查
+  // 立即执行一次健康检查
   await checkApiHealth()
-
-  // 加载API信息
-  if (isApiHealthy.value) {
-    await loadApiInfo()
-  }
 })
 
 onUnmounted(() => {
@@ -884,17 +781,27 @@ onUnmounted(() => {
   ApiHealthChecker.stopHealthCheck()
 
   // 取消订阅
-  if (unsubscribeHealthCheck) {
-    unsubscribeHealthCheck()
+  if (unsubscribeHealthCheck.value) { // 注意：这里需要加上 .value
+    unsubscribeHealthCheck.value()
   }
 
   // 清理定时器
-  clearAllTimeouts()
+  // 在你的代码中，watchSignalChange 函数使用了 setInterval
+  // 所以在组件销毁时，需要确保这些定时器被清理
+  // 你可以遍历 signalWatchers map 来停止所有监听器
+  signalWatchers.value.forEach(stopFunction => stopFunction());
+  signalWatchers.value.clear();
+
+  // 如果你还有其他任何手动创建的定时器，也需要在这里清理
+  TimerManager.clearAll(); // 新增这行
 })
 
-// 暴露给模板使用
-defineExpose({
-  TestState
+watch(() => testState.value, (newVal) => {
+  if (newVal === 'completed' || newVal === 'error') {
+    isTestRunning.value = false
+  } else if (newVal === 'running') {
+    isTestRunning.value = true
+  }
 })
 </script>
 
@@ -915,6 +822,47 @@ defineExpose({
   text-align: center;
 }
 
+.test-queue-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+.test-queue-panel ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0.5rem 0 0 0;
+}
+
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px dashed #ccc;
+}
+
+.task-item:last-child {
+  border-bottom: none;
+}
+
+.task-status {
+  font-weight: bold;
+}
+
+.task-running {
+  color: #3498db;
+}
+
+.task-completed {
+  color: #2ecc71;
+}
+
+.task-failed {
+  color: #e74c3c;
+}
 /* API状态指示器 */
 .api-status {
   display: flex;

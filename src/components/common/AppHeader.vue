@@ -38,7 +38,7 @@ const route = useRoute()
 const monitoringStore = useMonitoringStore()
 
 const routes = [
-  { name: 'Realtime', path: '/realtime', meta: { title: '实时可视化', icon: '📺' } },
+  { name: 'Realtime', path: '/realtime', meta: { title: '主页', icon: '📺' } },
   { name: 'Monitoring', path: '/monitoring', meta: { title: '状态监控', icon: '📊' } },
   { name: 'Configuration', path: '/configuration', meta: { title: '参数配置', icon: '⚙️' } },
   { name: 'Logs', path: '/logs', meta: { title: '系统日志', icon: '📝' } },

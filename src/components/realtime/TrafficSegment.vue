@@ -4,9 +4,10 @@
     <div class="segment-info">
       路段 {{ segmentId }}<br>
       车辆总数: {{ vehicleCount }}<br>
-      <span v-if="congestionLevel !== null">
-        拥堵程度: {{ Math.round(congestionLevel * 100) }}%
-      </span>
+      {{ lastVehicleAction?.vehicleId }}
+<!--      <span v-if="congestionLevel !== null">-->
+<!--        拥堵程度: {{ Math.round(congestionLevel * 100) }}%-->
+<!--      </span>-->
     </div>
 
     <!-- 车辆动画效果 -->

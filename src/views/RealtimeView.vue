@@ -37,10 +37,10 @@
     </div>
 
     <!-- 🚗 新增：车辆全程测试功能面板 -->
-    <VehicleTestPanel
-      :signals="signals"
-      :initialSignalIds="SIGNAL_IDS"
-    />
+<!--    <VehicleTestPanel-->
+<!--      :signals="signals"-->
+<!--      :initialSignalIds="SIGNAL_IDS"-->
+<!--    />-->
 
     <div class="traffic-layout">
       <!-- 终点信号机 SIG005 -->
@@ -169,10 +169,10 @@
           <input type="checkbox" v-model="logFilters.LANE_STATUS"> 车道状态
         </label>
         <!-- 新增测试日志过滤器 -->
-        <label class="filter-label">
-          <input type="checkbox" v-model="logFilters.VEHICLE_TEST" />
-          车辆测试
-        </label>
+<!--        <label class="filter-label">-->
+<!--          <input type="checkbox" v-model="logFilters.VEHICLE_TEST" />-->
+<!--          车辆测试-->
+<!--        </label>-->
       </div>
       <div class="log-panel" ref="logPanel">
         <div v-for="log in filteredLogs" :key="log.id"
@@ -208,7 +208,7 @@ import {
 import TrafficSegment from '@/components/realtime/TrafficSegment.vue'
 import TrafficSignal from '@/components/realtime/TrafficSignal.vue'
 import WaitingSignalGroup from '@/components/realtime/WaitingSignalGroup.vue'
-import VehicleTestPanel from '@/components/realtime/VehicleTestPanel.vue' // 新增导入
+//import VehicleTestPanel from '@/components/realtime/VehicleTestPanel.vue' // 新增导入
 
 // WebSocket 连接
 const { isConnected, subscribe, connect, lastUpdateTime } = useWebSocket()
@@ -275,8 +275,8 @@ const logFilters = ref({
   TRAFFIC_LIGHT: true,
   WAITING_AREA: true,
   LANE_STATUS: true,
-  WELCOME: true,
-  VEHICLE_TEST: true // 新增
+  WELCOME: true
+  //VEHICLE_TEST: true // 新增
 })
 
 // 计算属性

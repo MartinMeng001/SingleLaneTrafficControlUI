@@ -43,6 +43,17 @@ const routes: RouteRecordRaw[] = [
       icon: '📝'
     }
   },
+  // 新增：车辆测试页面路由（固定连接，不在导航中显示）
+  {
+    path: '/test',
+    name: 'Test',
+    component: () => import('@/views/TestView.vue'),
+    meta: {
+      title: '车辆测试',
+      icon: '🚗',
+      hidden: true // 标记为隐藏，不在导航中显示
+    }
+  },
   {
     path: '/help',
     name: 'Help',

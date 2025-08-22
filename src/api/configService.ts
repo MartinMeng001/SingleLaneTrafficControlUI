@@ -3,7 +3,7 @@
 
 import axios from 'axios'
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   message: string
   data?: T
@@ -15,12 +15,15 @@ export interface GlobalConfig {
   allRed: number
   maxAllRed: number
   platformUrl?: string
-  signalControllerList?: SignalController[]
+  signalList?: {
+    signals: Signal[]
+  }
+  signalNames?: string[]
 }
 
-export interface SignalController {
+export interface Signal {
   name: string
-  id: string
+  //id: string
 }
 
 export interface SegmentConfig {
@@ -132,14 +135,14 @@ class ConfigApiService {
   /**
    * 通用API调用方法
    */
-  private async apiCall<T = any>(
+  private async apiCall<T = unknown>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     // 使用axios实例而不是fetch
     try {
       const axiosConfig = {
-        method: options.method as any || 'GET',
+        method: options.method as unknown || 'GET',
         url: endpoint,
         data: options.body ? JSON.parse(options.body as string) : undefined,
         headers: options.headers
@@ -147,7 +150,7 @@ class ConfigApiService {
 
       const response = await configApi.request(axiosConfig)
       return response.data
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw new Error(error.message || '请求失败')
     }
   }
@@ -438,7 +441,7 @@ class ConfigApiService {
   /**
    * 处理API错误
    */
-  handleApiError(error: any): string {
+  handleApiError(error: unknown): string {
     if (error instanceof Error) {
       return error.message
     }

@@ -1,13 +1,4 @@
-const saveSegmentConfig = async () => {
-if (!validateSegmentConfig()) return
-
-isSaving.value = true
-try {
-// 使用upsigid作为路径参数，根据API文档要求
-await newConfigApiService.updateSegmentConfig(editingSegment.value.upsigid, editingSegment.value)
-
-// 更新本地数据
-const index = segments.value.findIndex(s => s.segmentId === editingSegment.<template>
+<template>
   <div class="configuration-view">
     <!-- 头部区域 -->
     <div class="view-header">
@@ -21,7 +12,7 @@ const index = segments.value.findIndex(s => s.segmentId === editingSegment.<temp
           <span class="btn-icon">❤️</span>
           健康检查
         </button>
-        <button @click="testConnection" class="test-btn">
+        <button @click="testConnection" class="test-btn hidden">
           <span class="btn-icon">🔗</span>
           测试连接
         </button>
@@ -74,7 +65,7 @@ const index = segments.value.findIndex(s => s.segmentId === editingSegment.<temp
           </div>
           <div class="config-item">
             <label class="config-label">信号控制器数量</label>
-            <div class="config-value readonly">{{ globalConfig.signalControllerList?.length || 0 }}</div>
+            <div class="config-value readonly">{{ globalConfig.signalNames?.length || 0 }}</div>
             <div class="config-description readonly">只读参数</div>
           </div>
         </div>
@@ -677,14 +668,22 @@ const filteredSegments = computed(() => {
 })
 
 // 加载完整配置数据
+// src/views/ConfigurationViewV2.vue
+
 const loadConfigs = async () => {
   isLoading.value = true
   try {
     // 获取完整配置
     const fullConfig = await newConfigApiService.getFullConfig()
 
+    // 打印原始返回数据中的 signalControllerList
+    console.log('原始API数据中的signalControllerList:', fullConfig.global.signalControllerList)
+
     // 设置全局配置
     globalConfig.value = fullConfig.global
+
+    // 再次打印赋值后的 signalControllerList
+    console.log('赋值到globalConfig后的signalControllerList:', globalConfig.value.signalControllerList)
 
     // 设置路段配置
     segments.value = fullConfig.segments.segmentList || []
@@ -696,8 +695,10 @@ const loadConfigs = async () => {
     detectPoints.value = fullConfig.detectPoints.detectPointList || []
 
     showMessage('配置加载成功', 'success')
-  } catch (error: any) {
-    showMessage(`加载配置失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`加载配置失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   } finally {
     isLoading.value = false
   }
@@ -709,8 +710,10 @@ const refreshConfig = async () => {
     await newConfigApiService.refreshConfig()
     await loadConfigs()
     showMessage('配置刷新成功', 'success')
-  } catch (error: any) {
-    showMessage(`配置刷新失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`配置刷新失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   }
 }
 
@@ -720,8 +723,10 @@ const checkHealth = async () => {
     const result = await newConfigApiService.healthCheck()
     healthStatus.value = result
     showHealthModal.value = true
-  } catch (error: any) {
-    showMessage(`健康检查失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`健康检查失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   }
 }
 
@@ -735,8 +740,10 @@ const testConnection = async () => {
     } else {
       showMessage(`连接失败: ${result.message}`, 'error')
     }
-  } catch (error: any) {
-    showMessage(`连接测试失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`连接测试失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   } finally {
     isLoading.value = false
   }
@@ -748,8 +755,10 @@ const showConstraints = async () => {
     const result = await newConfigApiService.getConstraints()
     constraintsInfo.value = result
     showConstraintsModal.value = true
-  } catch (error: any) {
-    showMessage(`获取约束信息失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`获取约束信息失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   }
 }
 
@@ -797,8 +806,10 @@ const saveGlobalConfig = async () => {
 
     showGlobalModal.value = false
     showMessage('全局配置保存成功', 'success')
-  } catch (error: any) {
-    showMessage(`保存失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`保存失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   } finally {
     isSaving.value = false
   }
@@ -874,8 +885,10 @@ const saveSegmentConfig = async () => {
 
     showSegmentModal.value = false
     showMessage('路段配置更新成功', 'success')
-  } catch (error: any) {
-    showMessage(`保存失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`保存失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   } finally {
     isSaving.value = false
   }
@@ -922,8 +935,10 @@ const saveWaitingAreaConfig = async () => {
 
     showWaitingAreaModal.value = false
     showMessage('等待区配置更新成功', 'success')
-  } catch (error: any) {
-    showMessage(`保存失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+  } catch (error: unknown) {
+    if(error instanceof Error) {
+      showMessage(`保存失败: ${newConfigApiService.handleApiError(error)}`, 'error')
+    }
   } finally {
     isSaving.value = false
   }
@@ -1066,6 +1081,7 @@ onMounted(() => {
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 2rem;
+  min-height: 20px; /* 设置你想要的最小高度 */
 }
 
 .notice-icon {
@@ -1163,7 +1179,7 @@ onMounted(() => {
 
 .config-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1.5rem;
 }
 
@@ -1210,7 +1226,7 @@ onMounted(() => {
 
 .segments-header {
   display: grid;
-  grid-template-columns: 1fr 100px 80px 80px 80px 80px 100px 100px 80px;
+  grid-template-columns: minmax(110px, 1fr) 100px 100px 100px 100px 100px 100px 100px 80px;
   background: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
 }
@@ -1234,7 +1250,7 @@ onMounted(() => {
 
 .segment-row {
   display: grid;
-  grid-template-columns: 1fr 100px 80px 80px 80px 80px 100px 100px 80px;
+  grid-template-columns: minmax(110px, 2fr) 100px 100px 100px 100px 100px 100px 100px 80px;
   border-bottom: 1px solid #f1f3f4;
   transition: background-color 0.2s ease;
 }
@@ -1396,7 +1412,8 @@ onMounted(() => {
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   display: flex;
-  align-items: center;
+  /*align-items: center;*/
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(4px);

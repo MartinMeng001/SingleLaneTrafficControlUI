@@ -342,12 +342,12 @@ function getSignalStatus(signalId: string): string {
 
 function isSignalAllowingUpstream(signalId: string): boolean {
   //return getSignalStatus(signalId) === 'UPSTREAM'
-  return ['UPSTREAM'].includes(getSignalStatus(signalId))
+  return ['UPSTREAM'].includes(getSignalStatus(signalId)) || ['UPDOWN'].includes(getSignalStatus(signalId))
 }
 
 function isSignalAllowingDownstream(signalId: string): boolean {
   //return getSignalStatus(signalId) === 'DOWNSTREAM'
-  return ['DOWNSTREAM'].includes(getSignalStatus(signalId))
+  return ['DOWNSTREAM'].includes(getSignalStatus(signalId)) || ['UPDOWN'].includes(getSignalStatus(signalId))
 }
 
 function watchSignalChange(signalId: string, callback: () => void, mode: TestMode) {

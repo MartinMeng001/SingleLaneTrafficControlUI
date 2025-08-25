@@ -65,12 +65,24 @@ const lastUpdateText = computed(() => {
 </script>
 
 <style scoped>
+/*
 .header {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   padding: 1rem 2rem;
   box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
   border-bottom: 3px solid #667eea;
+}*/
+.header {
+  position: sticky;  /* 使用 sticky 比 fixed 更灵活 */
+  top: 0;
+  z-index: var(--z-index-fixed);  /* 使用项目定义的层级 */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+  border-bottom: 3px solid #667eea;
+  flex-shrink: 0;  /* 防止被压缩 */
 }
 
 .nav-container {

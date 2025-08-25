@@ -64,8 +64,8 @@
             <div class="config-description readonly">只读参数</div>
           </div>
           <div class="config-item">
-            <label class="config-label">信号控制器数量</label>
-            <div class="config-value readonly">{{ globalConfig.signalNames?.length || 0 }}</div>
+            <label class="config-label">信号控制器</label>
+            <div class="config-value readonly">{{ globalConfig.signalNames?.join(', ') || '无' }}</div>
             <div class="config-description readonly">只读参数</div>
           </div>
         </div>
@@ -205,235 +205,244 @@
     </div>
 
     <!-- 路段配置编辑弹窗 -->
-    <div v-if="showSegmentModal" class="modal-overlay" @click="closeSegmentModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3 class="modal-title">编辑路段配置</h3>
-          <button @click="closeSegmentModal" class="close-btn">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label class="form-label">路段名称</label>
-              <input
-                v-model="editingSegment.name"
-                type="text"
-                class="form-input"
-                :class="{ 'error': segmentErrors.name }"
-              />
-              <div v-if="segmentErrors.name" class="error-message">
-                {{ segmentErrors.name }}
+    <Teleport to="body" v-if="showSegmentModal">
+      <div class="modal-overlay" @click="closeSegmentModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">编辑路段配置</h3>
+            <button @click="closeSegmentModal" class="close-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">路段名称</label>
+                <input
+                  v-model="editingSegment.name"
+                  type="text"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.name }"
+                />
+                <div v-if="segmentErrors.name" class="error-message">
+                  {{ segmentErrors.name }}
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">路段长度 (米)</label>
-              <input
-                v-model.number="editingSegment.length"
-                type="number"
-                min="1"
-                class="form-input"
-                :class="{ 'error': segmentErrors.length }"
-              />
-              <div v-if="segmentErrors.length" class="error-message">
-                {{ segmentErrors.length }}
+              <div class="form-group">
+                <label class="form-label">路段长度 (米)</label>
+                <input
+                  v-model.number="editingSegment.length"
+                  type="number"
+                  min="1"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.length }"
+                />
+                <div v-if="segmentErrors.length" class="error-message">
+                  {{ segmentErrors.length }}
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">最小红灯时间 (秒)</label>
-              <input
-                v-model.number="editingSegment.minRed"
-                type="number"
-                min="1"
-                class="form-input"
-                :class="{ 'error': segmentErrors.minRed }"
-              />
-              <div v-if="segmentErrors.minRed" class="error-message">
-                {{ segmentErrors.minRed }}
+              <div class="form-group">
+                <label class="form-label">最小红灯时间 (秒)</label>
+                <input
+                  v-model.number="editingSegment.minRed"
+                  type="number"
+                  min="1"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.minRed }"
+                />
+                <div v-if="segmentErrors.minRed" class="error-message">
+                  {{ segmentErrors.minRed }}
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">最大红灯时间 (秒)</label>
-              <input
-                v-model.number="editingSegment.maxRed"
-                type="number"
-                min="1"
-                class="form-input"
-                :class="{ 'error': segmentErrors.maxRed }"
-              />
-              <div v-if="segmentErrors.maxRed" class="error-message">
-                {{ segmentErrors.maxRed }}
+              <div class="form-group">
+                <label class="form-label">最大红灯时间 (秒)</label>
+                <input
+                  v-model.number="editingSegment.maxRed"
+                  type="number"
+                  min="1"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.maxRed }"
+                />
+                <div v-if="segmentErrors.maxRed" class="error-message">
+                  {{ segmentErrors.maxRed }}
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">最小绿灯时间 (秒)</label>
-              <input
-                v-model.number="editingSegment.minGreen"
-                type="number"
-                min="1"
-                class="form-input"
-                :class="{ 'error': segmentErrors.minGreen }"
-              />
-              <div v-if="segmentErrors.minGreen" class="error-message">
-                {{ segmentErrors.minGreen }}
+              <div class="form-group">
+                <label class="form-label">最小绿灯时间 (秒)</label>
+                <input
+                  v-model.number="editingSegment.minGreen"
+                  type="number"
+                  min="1"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.minGreen }"
+                />
+                <div v-if="segmentErrors.minGreen" class="error-message">
+                  {{ segmentErrors.minGreen }}
+                </div>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">最大绿灯时间 (秒)</label>
-              <input
-                v-model.number="editingSegment.maxGreen"
-                type="number"
-                min="1"
-                class="form-input"
-                :class="{ 'error': segmentErrors.maxGreen }"
-              />
-              <div v-if="segmentErrors.maxGreen" class="error-message">
-                {{ segmentErrors.maxGreen }}
+              <div class="form-group">
+                <label class="form-label">最大绿灯时间 (秒)</label>
+                <input
+                  v-model.number="editingSegment.maxGreen"
+                  type="number"
+                  min="1"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.maxGreen }"
+                />
+                <div v-if="segmentErrors.maxGreen" class="error-message">
+                  {{ segmentErrors.maxGreen }}
+                </div>
               </div>
-            </div>
-            <div class="form-group readonly-field">
-              <label class="form-label">上行信号ID (只读)</label>
-              <input
-                v-model="editingSegment.upsigid"
-                type="text"
-                class="form-input readonly"
-                readonly
-              />
-              <div class="form-hint">此参数不允许修改</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">下行信号ID</label>
-              <input
-                v-model="editingSegment.downsigid"
-                type="text"
-                class="form-input"
-                :class="{ 'error': segmentErrors.downsigid }"
-              />
-              <div v-if="segmentErrors.downsigid" class="error-message">
-                {{ segmentErrors.downsigid }}
+              <div class="form-group">
+                <label class="form-label">上行信号ID</label>
+                <input
+                  v-model="editingSegment.upsigid"
+                  type="text"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.upsigid }"
+                />
+                <div v-if="segmentErrors.upsigid" class="error-message">
+                  {{ segmentErrors.upsigid }}
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">下行信号ID</label>
+                <input
+                  v-model="editingSegment.downsigid"
+                  type="text"
+                  class="form-input"
+                  :class="{ 'error': segmentErrors.downsigid }"
+                />
+                <div v-if="segmentErrors.downsigid" class="error-message">
+                  {{ segmentErrors.downsigid }}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="closeSegmentModal" class="btn btn-secondary">取消</button>
-          <button @click="saveSegmentConfig" class="btn btn-primary" :disabled="isSaving">
-            {{ isSaving ? '保存中...' : '保存' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 等待区配置编辑弹窗 -->
-    <div v-if="showWaitingAreaModal" class="modal-overlay" @click="closeWaitingAreaModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3 class="modal-title">编辑等待区配置</h3>
-          <button @click="closeWaitingAreaModal" class="close-btn">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group readonly-field">
-              <label class="form-label">等待区索引 (只读)</label>
-              <input
-                v-model="editingWaitingArea.index"
-                type="number"
-                class="form-input readonly"
-                readonly
-              />
-              <div class="form-hint">此参数不允许修改</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">上行容量</label>
-              <input
-                v-model.number="editingWaitingArea.upCapacity"
-                type="number"
-                min="1"
-                max="100"
-                class="form-input"
-                :class="{ 'error': waitingAreaErrors.upCapacity }"
-              />
-              <div v-if="waitingAreaErrors.upCapacity" class="error-message">
-                {{ waitingAreaErrors.upCapacity }}
-              </div>
-              <div class="form-hint">取值范围: 1-100</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">下行容量</label>
-              <input
-                v-model.number="editingWaitingArea.downCapacity"
-                type="number"
-                min="1"
-                max="100"
-                class="form-input"
-                :class="{ 'error': waitingAreaErrors.downCapacity }"
-              />
-              <div v-if="waitingAreaErrors.downCapacity" class="error-message">
-                {{ waitingAreaErrors.downCapacity }}
-              </div>
-              <div class="form-hint">取值范围: 1-100</div>
-            </div>
+          <div class="modal-footer">
+            <button @click="closeSegmentModal" class="btn btn-secondary">取消</button>
+            <button @click="saveSegmentConfig" class="btn btn-primary" :disabled="isSaving">
+              {{ isSaving ? '保存中...' : '保存' }}
+            </button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button @click="closeWaitingAreaModal" class="btn btn-secondary">取消</button>
-          <button @click="saveWaitingAreaConfig" class="btn btn-primary" :disabled="isSaving">
-            {{ isSaving ? '保存中...' : '保存' }}
-          </button>
+      </div>
+    </Teleport>
+
+    <!-- 等待区配置弹窗 - 独立的 Teleport -->
+    <Teleport to="body" v-if="showWaitingAreaModal">
+      <div class="modal-overlay" @click="closeWaitingAreaModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">编辑等待区配置</h3>
+            <button @click="closeWaitingAreaModal" class="close-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group readonly-field">
+                <label class="form-label">等待区索引 (只读)</label>
+                <input
+                  v-model="editingWaitingArea.index"
+                  type="number"
+                  class="form-input readonly"
+                  readonly
+                />
+                <div class="form-hint">此参数不允许修改</div>
+              </div>
+              <div class="form-row-group">
+                <div class="form-group">
+                  <label class="form-label">上行容量</label>
+                  <input
+                    v-model.number="editingWaitingArea.upCapacity"
+                    type="number"
+                    min="1"
+                    max="100"
+                    class="form-input"
+                    :class="{ 'error': waitingAreaErrors.upCapacity }"
+                  />
+                  <div v-if="waitingAreaErrors.upCapacity" class="error-message">
+                    {{ waitingAreaErrors.upCapacity }}
+                  </div>
+                  <div class="form-hint">取值范围: 1-100</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">下行容量</label>
+                  <input
+                    v-model.number="editingWaitingArea.downCapacity"
+                    type="number"
+                    min="1"
+                    max="100"
+                    class="form-input"
+                    :class="{ 'error': waitingAreaErrors.downCapacity }"
+                  />
+                  <div v-if="waitingAreaErrors.downCapacity" class="error-message">
+                    {{ waitingAreaErrors.downCapacity }}
+                  </div>
+                  <div class="form-hint">取值范围: 1-100</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button @click="closeWaitingAreaModal" class="btn btn-secondary">取消</button>
+            <button @click="saveWaitingAreaConfig" class="btn btn-primary" :disabled="isSaving">
+              {{ isSaving ? '保存中...' : '保存' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-
+    </Teleport>
     <!-- 全局配置编辑弹窗 -->
-    <div v-if="showGlobalModal" class="modal-overlay" @click="closeGlobalModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3 class="modal-title">编辑全局配置</h3>
-          <button @click="closeGlobalModal" class="close-btn">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="constraints-reminder">
-            <div class="reminder-icon">⚠️</div>
-            <div class="reminder-text">只允许修改 AllRed 和 MaxAllRed 参数</div>
+    <Teleport to="body" v-if="showGlobalModal">
+      <div class="modal-overlay" @click="closeGlobalModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3 class="modal-title">编辑全局配置</h3>
+            <button @click="closeGlobalModal" class="close-btn">✕</button>
           </div>
-          <div class="form-group">
-            <label class="form-label">全红时间 (秒)</label>
-            <input
-              v-model.number="editingGlobal.allRed"
-              type="number"
-              min="1"
-              max="600"
-              class="form-input"
-              :class="{ 'error': globalErrors.allRed }"
-            />
-            <div v-if="globalErrors.allRed" class="error-message">
-              {{ globalErrors.allRed }}
+          <div class="modal-body">
+            <div class="constraints-reminder">
+              <div class="reminder-icon">⚠️</div>
+              <div class="reminder-text">只允许修改 AllRed 和 MaxAllRed 参数</div>
             </div>
-            <div class="form-hint">取值范围: 1-600秒</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">最大全红时间 (秒)</label>
-            <input
-              v-model.number="editingGlobal.maxAllRed"
-              type="number"
-              min="1"
-              max="1200"
-              class="form-input"
-              :class="{ 'error': globalErrors.maxAllRed }"
-            />
-            <div v-if="globalErrors.maxAllRed" class="error-message">
-              {{ globalErrors.maxAllRed }}
+            <div class="form-group">
+              <label class="form-label">全红时间 (秒)</label>
+              <input
+                v-model.number="editingGlobal.allRed"
+                type="number"
+                min="1"
+                max="600"
+                class="form-input"
+                :class="{ 'error': globalErrors.allRed }"
+              />
+              <div v-if="globalErrors.allRed" class="error-message">
+                {{ globalErrors.allRed }}
+              </div>
+              <div class="form-hint">取值范围: 1-600秒</div>
             </div>
-            <div class="form-hint">取值范围: 1-1200秒，必须大于等于全红时间</div>
+            <div class="form-group">
+              <label class="form-label">最大全红时间 (秒)</label>
+              <input
+                v-model.number="editingGlobal.maxAllRed"
+                type="number"
+                min="1"
+                max="1200"
+                class="form-input"
+                :class="{ 'error': globalErrors.maxAllRed }"
+              />
+              <div v-if="globalErrors.maxAllRed" class="error-message">
+                {{ globalErrors.maxAllRed }}
+              </div>
+              <div class="form-hint">取值范围: 1-1200秒，必须大于等于全红时间</div>
+            </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="closeGlobalModal" class="btn btn-secondary">取消</button>
-          <button @click="saveGlobalConfig" class="btn btn-primary" :disabled="isSaving">
-            {{ isSaving ? '保存中...' : '保存' }}
-          </button>
+          <div class="modal-footer">
+            <button @click="closeGlobalModal" class="btn btn-secondary">取消</button>
+            <button @click="saveGlobalConfig" class="btn btn-primary" :disabled="isSaving">
+              {{ isSaving ? '保存中...' : '保存' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- 健康检查结果弹窗 -->
     <div v-if="showHealthModal" class="modal-overlay" @click="closeHealthModal">
@@ -860,6 +869,10 @@ const validateSegmentConfig = (): boolean => {
 
   if (editingSegment.value.minGreen > editingSegment.value.maxGreen) {
     segmentErrors.value.maxGreen = '最大绿灯时间必须大于等于最小绿灯时间'
+  }
+
+  if (!editingSegment.value.upsigid.trim()) {
+    segmentErrors.value.upsigid = '上行信号ID不能为空';
   }
 
   if (!editingSegment.value.downsigid.trim()) {
@@ -1373,7 +1386,7 @@ onMounted(() => {
 
 .detect-points-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
 
@@ -1532,6 +1545,18 @@ onMounted(() => {
   margin-bottom: 0.5rem;
   font-weight: 600;
   color: #495057;
+}
+
+/* 新增样式，用于将上下行容量放在一行 */
+.form-row-group {
+  display: flex;
+  gap: 1rem;
+  /* 确保子元素能够等宽伸展 */
+  flex: 1;
+}
+
+.form-row-group .form-group {
+  flex: 1;
 }
 
 .form-input, .form-select {
@@ -1943,6 +1968,10 @@ onMounted(() => {
 
   .operations-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-row-group {
+    flex-direction: column;
   }
 
   .message-toast {

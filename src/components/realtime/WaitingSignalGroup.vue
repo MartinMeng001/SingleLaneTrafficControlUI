@@ -38,7 +38,7 @@ interface Props {
 
   // 信号灯属性
   signalId: string
-  signalStatus: 'UPSTREAM' | 'DOWNSTREAM' | 'ALL_RED' | 'YELLOW_FLASH'
+  signalStatus: 'UPSTREAM' | 'DOWNSTREAM' | 'ALL_RED' | 'YELLOW_FLASH' | 'UPDOWN'
   statusDescription?: string
   phase?: number | null
   showHistory?: boolean

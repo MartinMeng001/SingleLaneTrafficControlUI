@@ -12,15 +12,14 @@
 
     <!-- 测试说明 -->
     <div class="test-description">
-      <strong>测试说明：</strong>本页面提供车辆全程测试功能，可以模拟车辆在单车道交通系统中的完整行程。
-      <br><strong>注意：</strong>测试功能需要WebSocket连接正常才能使用，请确保系统连接状态正常。
+      <strong>测试说明：</strong
+      >本页面提供车辆全程测试功能，可以模拟车辆在单车道交通系统中的完整行程。 <br /><strong
+        >注意：</strong
+      >测试功能需要WebSocket连接正常才能使用，请确保系统连接状态正常。
     </div>
 
     <!-- 车辆测试面板 -->
-    <VehicleTestPanel
-      :signals="signals"
-      :initialSignalIds="SIGNAL_IDS"
-    />
+    <VehicleTestPanel :signals="signals" :initialSignalIds="SIGNAL_IDS" />
 
     <!-- 信号状态概览 -->
     <div class="signals-overview">
@@ -53,18 +52,13 @@
         <div class="logs-controls">
           <button @click="clearTestLogs" class="clear-logs-btn">清空日志</button>
           <label class="filter-toggle">
-            <input
-              type="checkbox"
-              v-model="showTestLogsOnly"
-            />
+            <input type="checkbox" v-model="showTestLogsOnly" />
             只显示测试日志
           </label>
         </div>
       </div>
       <div class="logs-panel" ref="logsPanel">
-        <div v-if="filteredTestLogs.length === 0" class="no-logs">
-          暂无日志
-        </div>
+        <div v-if="filteredTestLogs.length === 0" class="no-logs">暂无日志</div>
         <div
           v-for="log in filteredTestLogs"
           :key="log.id"
@@ -89,7 +83,7 @@ import {
   TrafficLightMessageData,
   WaitingAreaMessageData,
   LaneStatusMessageData,
-  Signal
+  Signal,
 } from '@/types/websocket'
 
 // 导入车辆测试面板组件
@@ -102,10 +96,13 @@ const { isConnected, subscribe, connect, lastUpdateTime } = useWebSocket()
 const SIGNAL_IDS = ['37', '38', '41', '42', '43']
 
 // 数据状态
-const initialSignalsState: Record<string, Signal> = SIGNAL_IDS.reduce((acc, id) => {
-  acc[id] = { status: 'ALL_RED', description: '', phase: null }
-  return acc
-}, {} as Record<string, Signal>)
+const initialSignalsState: Record<string, Signal> = SIGNAL_IDS.reduce(
+  (acc, id) => {
+    acc[id] = { status: 'ALL_RED', description: '', phase: null }
+    return acc
+  },
+  {} as Record<string, Signal>,
+)
 
 const signals = ref<Record<string, Signal>>(initialSignalsState)
 
@@ -137,8 +134,11 @@ const lastUpdateText = computed(() => {
 
 const filteredTestLogs = computed(() => {
   if (showTestLogsOnly.value) {
-    return testLogs.value.filter(log => log.messageType === 'VEHICLE_TEST')
-      .slice().reverse().slice(0, 100)
+    return testLogs.value
+      .filter((log) => log.messageType === 'VEHICLE_TEST')
+      .slice()
+      .reverse()
+      .slice(0, 100)
   }
   return testLogs.value.slice().reverse().slice(0, 100)
 })
@@ -155,44 +155,65 @@ const getSignalDescription = (signalId: string) => {
 const getSignalStatusClass = (signalId: string) => {
   const status = getSignalStatus(signalId)
   switch (status) {
-    case 'UPSTREAM': return 'signal-upstream'
-    case 'DOWNSTREAM': return 'signal-downstream'
-    case 'YELLOW_FLASH': return 'signal-yellow'
+    case 'UPDOWN':
+      return 'signal-upstream'
+    case 'UPSTREAM':
+      return 'signal-upstream'
+    case 'DOWNSTREAM':
+      return 'signal-downstream'
+    case 'YELLOW_FLASH':
+      return 'signal-yellow'
     case 'ALL_RED':
-    default: return 'signal-red'
+    default:
+      return 'signal-red'
   }
 }
 
 const getSignalIndicatorClass = (signalId: string) => {
   const status = getSignalStatus(signalId)
   switch (status) {
-    case 'UPSTREAM': return 'indicator-green'
-    case 'DOWNSTREAM': return 'indicator-green'
-    case 'YELLOW_FLASH': return 'indicator-yellow'
+    case 'UPDOWN': return 'indicator-green'
+    case 'UPSTREAM':
+      return 'indicator-green'
+    case 'DOWNSTREAM':
+      return 'indicator-green'
+    case 'YELLOW_FLASH':
+      return 'indicator-yellow'
     case 'ALL_RED':
-    default: return 'indicator-red'
+    default:
+      return 'indicator-red'
   }
 }
 
 const getSignalIndicator = (signalId: string) => {
   const status = getSignalStatus(signalId)
   switch (status) {
-    case 'UPSTREAM': return '↑'
-    case 'DOWNSTREAM': return '↓'
-    case 'YELLOW_FLASH': return '⚠'
+    case 'UPDOWN':
+      return '↑↓'
+    case 'UPSTREAM':
+      return '↑'
+    case 'DOWNSTREAM':
+      return '↓'
+    case 'YELLOW_FLASH':
+      return '⚠'
     case 'ALL_RED':
-    default: return '●'
+    default:
+      return '●'
   }
 }
 
 // 日志相关方法
-const addTestLog = (message: string, type: TestLogMessage['type'] = 'info', messageType: string = 'VEHICLE_TEST') => {
+const addTestLog = (
+  message: string,
+  type: TestLogMessage['type'] = 'info',
+  messageType: string = 'VEHICLE_TEST',
+) => {
   const logId = Date.now() + Math.random()
   const timestamp = new Date().toLocaleTimeString('zh-CN', {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   })
 
   testLogs.value.push({
@@ -200,7 +221,7 @@ const addTestLog = (message: string, type: TestLogMessage['type'] = 'info', mess
     timestamp,
     message,
     type,
-    messageType
+    messageType,
   })
 
   // 自动滚动到底部
@@ -217,7 +238,11 @@ const clearTestLogs = () => {
 
 // 消息处理
 const handleMessage = (message: WebSocketMessage) => {
-  addTestLog(`收到消息: ${message.messageType}, 内容: ${JSON.stringify(message.data)}`, 'info', message.messageType)
+  addTestLog(
+    `收到消息: ${message.messageType}, 内容: ${JSON.stringify(message.data)}`,
+    'info',
+    message.messageType,
+  )
 
   switch (message.messageType) {
     case 'TRAFFIC_LIGHT':
@@ -237,11 +262,15 @@ const handleTrafficLightMessage = (data: TrafficLightMessageData) => {
     signals.value[signalId] = {
       status: data.status,
       description: data.description || '',
-      phase: data.phase || null
+      phase: data.phase || null,
     }
 
     if (oldStatus !== data.status) {
-      addTestLog(`信号机${signalId}状态变更: ${oldStatus} → ${data.status}`, 'info', 'TRAFFIC_LIGHT')
+      addTestLog(
+        `信号机${signalId}状态变更: ${oldStatus} → ${data.status}`,
+        'info',
+        'TRAFFIC_LIGHT',
+      )
     }
   }
 }
@@ -315,8 +344,13 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .test-description {

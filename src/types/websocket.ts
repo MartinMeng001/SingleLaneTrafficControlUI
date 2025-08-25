@@ -96,7 +96,7 @@ export interface LastVehicleAction {
   timestamp: number;
 }
 export interface Signal {
-  status: 'ALL_RED' | 'YELLOW_FLASH' | 'UPSTREAM' | 'DOWNSTREAM';
+  status: 'ALL_RED' | 'YELLOW_FLASH' | 'UPSTREAM' | 'DOWNSTREAM' | 'UPDOWN';
   description: string;
   phase: number | null;
 }

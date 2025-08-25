@@ -90,6 +90,8 @@ const lightClasses = computed(() => {
       return `${baseClass} status-upstream`
     case 'DOWNSTREAM':
       return `${baseClass} status-downstream`
+    case 'UPDOWN':
+      return `${baseClass} status-upstream`
     case 'ALL_RED':
       return `${baseClass} status-all-red`
     case 'YELLOW_FLASH':
@@ -106,6 +108,8 @@ const statusIcon = computed(() => {
       return '↑'
     case 'DOWNSTREAM':
       return '↓'
+    case 'UPDOWN':
+      return '↑↓'
     case 'ALL_RED':
       return '●'
     case 'YELLOW_FLASH':
@@ -124,6 +128,7 @@ const statusDescription = computed(() => {
   const descriptions: Record<string, string> = {
     'UPSTREAM': '上行',
     'DOWNSTREAM': '下行',
+    'UPDOWN': '双向',
     'ALL_RED': '全红',
     'YELLOW_FLASH': '黄闪'
   }
@@ -153,6 +158,8 @@ const getHistoryDotClass = (status: string) => {
       return 'history-upstream'
     case 'DOWNSTREAM':
       return 'history-downstream'
+    case 'UPDOWN':
+      return 'history-upstream'
     case 'ALL_RED':
       return 'history-red'
     case 'YELLOW_FLASH':

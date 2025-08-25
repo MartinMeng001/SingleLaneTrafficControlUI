@@ -342,12 +342,12 @@ function getSignalStatus(signalId: string): string {
 
 function isSignalAllowingUpstream(signalId: string): boolean {
   //return getSignalStatus(signalId) === 'UPSTREAM'
-  return ['UPSTREAM'].includes(getSignalStatus(signalId))
+  return ['UPSTREAM'].includes(getSignalStatus(signalId)) || ['UPDOWN'].includes(getSignalStatus(signalId))
 }
 
 function isSignalAllowingDownstream(signalId: string): boolean {
   //return getSignalStatus(signalId) === 'DOWNSTREAM'
-  return ['DOWNSTREAM'].includes(getSignalStatus(signalId))
+  return ['DOWNSTREAM'].includes(getSignalStatus(signalId)) || ['UPDOWN'].includes(getSignalStatus(signalId))
 }
 
 function watchSignalChange(signalId: string, callback: () => void, mode: TestMode) {
@@ -454,231 +454,414 @@ async function runTestQueue() {
 }
 
 /**
+ * 执行车辆在单个路段的完整测试（进入、停留、离开）
+ * @param segmentId 路段ID
+ * @param steps
+ * @param vehiclePlate 车牌
+ * @param nextLocationKey 离开路段后的位置键
+ * @param mode
+ */
+async function executeSegmentTest(segmentId: number, steps: Step[], vehiclePlate: string, nextLocationKey: string, mode: TestMode) {
+  const isUpstream = mode === TestMode.UPSTREAM;
+  // 核心改动在这里：使用箭头函数来调用
+  const enterApi = isUpstream
+    ? () => VehicleTestApiService.vehicleEnterUpstream(segmentId, vehiclePlate)
+    : () => VehicleTestApiService.vehicleEnterDownstream(segmentId, vehiclePlate);
+
+  const exitApi = isUpstream
+    ? () => VehicleTestApiService.vehicleExitUpstream(segmentId, vehiclePlate)
+    : () => VehicleTestApiService.vehicleExitDownstream(segmentId, vehiclePlate);
+  const enterStepKey = `segment${segmentId}_enter`;
+  const exitStepKey = `segment${segmentId}_exit`;
+
+  try {
+    // 进入路段
+    updateStepStatus(steps, enterStepKey, 'active');
+    const enterResponse = await enterApi();
+    updateStepStatus(steps, enterStepKey, 'completed');
+    currentLocation.value = `SEGMENT_${segmentId}`;
+    addLog(`车辆成功进入路段${segmentId}: ${enterResponse.message}`, 'success');
+
+    await delay(10000); // 停留10秒
+
+    // 离开路段
+    updateStepStatus(steps, exitStepKey, 'active');
+    const exitResponse = await exitApi();
+    updateStepStatus(steps, exitStepKey, 'completed');
+    currentLocation.value = nextLocationKey;
+    addLog(`车辆离开路段${segmentId}，进入${nextLocationKey}: ${exitResponse.message}`, 'success');
+
+  } catch (error) {
+    if(error instanceof Error) {
+      addLog(`执行路段 ${segmentId} 测试失败: ${error.message}`, 'error');
+    }
+    throw error;
+  }
+}
+
+/**
  * 封装上行测试的核心逻辑
  */
 /**
  * 封装上行测试的核心逻辑
  */
-async function executeUpstreamTest(signalIds: string[], steps: Step[], vehiclePlate: string) {
-  //if (!currentTask.value) return;
-  //const steps = currentTask.value.steps;
-
+// 假设这是 executeUpstreamTest 函数的开始部分
+async function executeUpstreamTest(
+  signalIds: string[],
+  steps: Step[],
+  vehiclePlate: string
+) {
   try {
-    // 步骤1: 检查起点信号机状态
+    // 步骤1: 检查起点信号机并进入路段1
     if (!isSignalAllowingUpstream(signalIds[0])) {
-      updateStepStatus(steps, 'start', 'waiting');
+      updateStepStatus(steps, 'segment1_enter', 'waiting');
       addLog('起点信号机不允许上行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[0], () => resolve(), TestMode.UPSTREAM);
       });
     }
-    updateStepStatus(steps, 'start', 'completed');
-    addLog('起点信号机允许上行，开始测试', 'success');
 
-    // 步骤2: 车辆进入路段1
-    updateStepStatus(steps, 'segment1_enter', 'active');
-    const enter1Response = await VehicleTestApiService.vehicleEnterUpstream(1, vehiclePlate);
-    updateStepStatus(steps, 'segment1_enter', 'completed');
-    currentLocation.value = 'SEGMENT_1';
-    addLog(`车辆成功进入路段1: ${enter1Response.message}`, 'success');
-    await delay(10000); // 停留10秒
-
-    // 步骤3: 车辆离开路段1
-    updateStepStatus(steps, 'segment1_exit', 'active');
-    const exit1Response = await VehicleTestApiService.vehicleExitUpstream(1, vehiclePlate);
-    updateStepStatus(steps, 'segment1_exit', 'completed');
-    currentLocation.value = 'WAITING_2';
-    updateStepStatus(steps, 'waiting2', 'completed');
-    addLog(`车辆离开路段1，进入等待区2: ${exit1Response.message}`, 'success');
+    // 使用封装后的函数来执行路段1的测试
+    await executeSegmentTest(1, steps, vehiclePlate, 'WAITING_2', TestMode.UPSTREAM);
 
     // 步骤4: 检查信号机2并进入路段2
-    updateStepStatus(steps, 'segment2_enter', 'active');
-    if (!isSignalAllowingUpstream(signalIds[1])) { // 检查信号机2
+    if (!isSignalAllowingUpstream(signalIds[1])) {
       updateStepStatus(steps, 'segment2_enter', 'waiting');
       addLog('信号机2不允许上行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[1], () => resolve(), TestMode.UPSTREAM);
       });
     }
-    const enter2Response = await VehicleTestApiService.vehicleEnterUpstream(2, vehiclePlate);
-    updateStepStatus(steps, 'segment2_enter', 'completed');
-    currentLocation.value = 'SEGMENT_2';
-    addLog(`车辆成功进入路段2: ${enter2Response.message}`, 'success');
-    await delay(10000);
 
-    // 步骤5: 车辆离开路段2
-    updateStepStatus(steps, 'segment2_exit', 'active');
-    const exit2Response = await VehicleTestApiService.vehicleExitUpstream(2, vehiclePlate);
-    updateStepStatus(steps, 'segment2_exit', 'completed');
-    currentLocation.value = 'WAITING_3';
-    updateStepStatus(steps, 'waiting3', 'completed');
-    addLog(`车辆离开路段2，进入等待区3: ${exit2Response.message}`, 'success');
+    // 使用封装后的函数来执行路段2的测试
+    await executeSegmentTest(2, steps, vehiclePlate, 'WAITING_3', TestMode.UPSTREAM);
 
-    // 步骤6: 检查信号机3并进入路段3
-    updateStepStatus(steps, 'segment3_enter', 'active');
-    if (!isSignalAllowingUpstream(signalIds[2])) { // 检查信号机3
+    // 步骤7: 检查信号机3并进入路段3
+    if (!isSignalAllowingUpstream(signalIds[2])) {
       updateStepStatus(steps, 'segment3_enter', 'waiting');
       addLog('信号机3不允许上行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[2], () => resolve(), TestMode.UPSTREAM);
       });
     }
-    const enter3Response = await VehicleTestApiService.vehicleEnterUpstream(3, vehiclePlate);
-    updateStepStatus(steps, 'segment3_enter', 'completed');
-    currentLocation.value = 'SEGMENT_3';
-    addLog(`车辆成功进入路段3: ${enter3Response.message}`, 'success');
-    await delay(10000);
 
-    // 步骤7: 车辆离开路段3
-    updateStepStatus(steps, 'segment3_exit', 'active');
-    const exit3Response = await VehicleTestApiService.vehicleExitUpstream(3, vehiclePlate);
-    updateStepStatus(steps, 'segment3_exit', 'completed');
-    currentLocation.value = 'WAITING_4';
-    updateStepStatus(steps, 'waiting4', 'completed');
-    addLog(`车辆离开路段3，进入等待区4: ${exit3Response.message}`, 'success');
+    // 使用封装后的函数来执行路段3的测试
+    await executeSegmentTest(3, steps, vehiclePlate, 'WAITING_4', TestMode.UPSTREAM);
 
-    // 步骤8: 检查信号机4并进入路段4
-    updateStepStatus(steps, 'segment4_enter', 'active');
-    if (!isSignalAllowingUpstream(signalIds[3])) { // 检查信号机4
+    // 步骤10: 检查信号机4并进入路段4
+    if (!isSignalAllowingUpstream(signalIds[3])) {
       updateStepStatus(steps, 'segment4_enter', 'waiting');
       addLog('信号机4不允许上行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[3], () => resolve(), TestMode.UPSTREAM);
       });
     }
-    const enter4Response = await VehicleTestApiService.vehicleEnterUpstream(4, vehiclePlate);
-    updateStepStatus(steps, 'segment4_enter', 'completed');
-    currentLocation.value = 'SEGMENT_4';
-    addLog(`车辆成功进入路段4: ${enter4Response.message}`, 'success');
-    await delay(10000);
 
-    // 步骤9: 车辆离开路段4，测试结束
-    updateStepStatus(steps, 'segment4_exit', 'active');
-    const exit4Response = await VehicleTestApiService.vehicleExitUpstream(4, vehiclePlate);
-    updateStepStatus(steps, 'segment4_exit', 'completed');
-    currentLocation.value = 'NONE';
-    addLog(`车辆离开路段4，上行测试完成: ${exit4Response.message}`, 'success');
+    // 使用封装后的函数来执行路段4的测试
+    await executeSegmentTest(4, steps, vehiclePlate, 'COMPLETED', TestMode.UPSTREAM);
+    // 任务完成
+    updateStepStatus(steps, 'task_completion', 'completed');
+    addLog(`车辆离开路段4，上行测试完成: ${vehiclePlate}`, 'success');
 
   } catch (error) {
-    testState.value = 'error';
-    if (error instanceof Error) {
+    // 错误处理
+    if(error instanceof Error) {
+      updateStepStatus(steps, 'task_completion', 'completed');
       addLog(`上行测试失败: ${error.message}`, 'error');
+      console.error(error);
     }
-    throw error; // 抛出错误以停止任务队列
+    throw error;
   }
 }
-
-/**
- * 封装下行测试的核心逻辑
- */
-async function executeDownstreamTest(signalIds: string[], steps: Step[], vehiclePlate: string) {
-  //if (!currentTask.value) return;
-  //const steps = currentTask.value.steps;
-
+// 假设这是 executeDownstreamTest 函数的开始部分
+async function executeDownstreamTest(
+  signalIds: string[],
+  steps: Step[],
+  vehiclePlate: string
+) {
   try {
-    // 步骤1: 检查终点信号机状态
+    // 步骤1: 检查终点信号机并进入路段4（下行）
     if (!isSignalAllowingDownstream(signalIds[4])) {
-      updateStepStatus(steps, 'start', 'waiting');
+      updateStepStatus(steps, 'segment4_enter', 'waiting');
       addLog('终点信号机不允许下行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[4], () => resolve(), TestMode.DOWNSTREAM);
       });
     }
-    updateStepStatus(steps, 'start', 'completed');
-    addLog('终点信号机允许下行，开始测试', 'success');
 
-    // 步骤2: 车辆进入路段4
-    updateStepStatus(steps, 'segment4_enter', 'active');
-    const enter4Response = await VehicleTestApiService.vehicleEnterDownstream(4, vehiclePlate);
-    updateStepStatus(steps, 'segment4_enter', 'completed');
-    currentLocation.value = 'SEGMENT_4';
-    addLog(`车辆成功进入路段4（下行）: ${enter4Response.message}`, 'success');
-    await delay(10000);
-
-    // 步骤3: 车辆离开路段4
-    updateStepStatus(steps, 'segment4_exit', 'active');
-    const exit4Response = await VehicleTestApiService.vehicleExitDownstream(4, vehiclePlate);
-    updateStepStatus(steps, 'segment4_exit', 'completed');
-    currentLocation.value = 'WAITING_3';
-    updateStepStatus(steps, 'waiting3', 'completed');
-    addLog(`车辆离开路段4，进入等待区3: ${exit4Response.message}`, 'success');
+    // 使用封装后的函数来执行路段4的测试
+    await executeSegmentTest(4, steps, vehiclePlate, 'WAITING_3', TestMode.DOWNSTREAM);
 
     // 步骤4: 检查信号机3并进入路段3
-    updateStepStatus(steps, 'segment3_enter', 'active');
-    if (!isSignalAllowingDownstream(signalIds[3])) { // 检查信号机3
+    if (!isSignalAllowingDownstream(signalIds[3])) {
       updateStepStatus(steps, 'segment3_enter', 'waiting');
       addLog('信号机3不允许下行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[3], () => resolve(), TestMode.DOWNSTREAM);
       });
     }
-    const enter3Response = await VehicleTestApiService.vehicleEnterDownstream(3, vehiclePlate);
-    updateStepStatus(steps, 'segment3_enter', 'completed');
-    currentLocation.value = 'SEGMENT_3';
-    addLog(`车辆成功进入路段3（下行）: ${enter3Response.message}`, 'success');
-    await delay(10000);
 
-    // 步骤5: 车辆离开路段3
-    updateStepStatus(steps, 'segment3_exit', 'active');
-    const exit3Response = await VehicleTestApiService.vehicleExitDownstream(3, vehiclePlate);
-    updateStepStatus(steps, 'segment3_exit', 'completed');
-    currentLocation.value = 'WAITING_2';
-    updateStepStatus(steps, 'waiting2', 'completed');
-    addLog(`车辆离开路段3，进入等待区2: ${exit3Response.message}`, 'success');
+    // 使用封装后的函数来执行路段3的测试
+    await executeSegmentTest(3, steps, vehiclePlate, 'WAITING_2', TestMode.DOWNSTREAM);
 
-    // 步骤6: 检查信号机2并进入路段2
-    updateStepStatus(steps, 'segment2_enter', 'active');
-    if (!isSignalAllowingDownstream(signalIds[2])) { // 检查信号机2
+    // 步骤7: 检查信号机2并进入路段2
+    if (!isSignalAllowingDownstream(signalIds[2])) {
       updateStepStatus(steps, 'segment2_enter', 'waiting');
       addLog('信号机2不允许下行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[2], () => resolve(), TestMode.DOWNSTREAM);
       });
     }
-    const enter2Response = await VehicleTestApiService.vehicleEnterDownstream(2, vehiclePlate);
-    updateStepStatus(steps, 'segment2_enter', 'completed');
-    currentLocation.value = 'SEGMENT_2';
-    addLog(`车辆成功进入路段2（下行）: ${enter2Response.message}`, 'success');
-    await delay(10000);
 
-    // 步骤7: 车辆离开路段2
-    updateStepStatus(steps, 'segment2_exit', 'active');
-    const exit2Response = await VehicleTestApiService.vehicleExitDownstream(2, vehiclePlate);
-    updateStepStatus(steps, 'segment2_exit', 'completed');
-    currentLocation.value = 'WAITING_1';
-    updateStepStatus(steps, 'waiting1', 'completed');
-    addLog(`车辆离开路段2，进入等待区1: ${exit2Response.message}`, 'success');
+    // 使用封装后的函数来执行路段2的测试
+    await executeSegmentTest(2, steps, vehiclePlate, 'WAITING_1', TestMode.DOWNSTREAM);
 
-    // 步骤8: 检查信号机1并进入路段1
-    updateStepStatus(steps, 'segment1_enter', 'active');
-    if (!isSignalAllowingDownstream(signalIds[1])) { // 检查信号机1
+    // 步骤10: 检查信号机1并进入路段1
+    if (!isSignalAllowingDownstream(signalIds[1])) {
       updateStepStatus(steps, 'segment1_enter', 'waiting');
       addLog('信号机1不允许下行，等待信号变化...', 'warning');
       await new Promise<void>((resolve) => {
         watchSignalChange(signalIds[1], () => resolve(), TestMode.DOWNSTREAM);
       });
     }
-    const enter1Response = await VehicleTestApiService.vehicleEnterDownstream(1, vehiclePlate);
-    updateStepStatus(steps, 'segment1_enter', 'completed');
-    currentLocation.value = 'SEGMENT_1';
-    addLog(`车辆成功进入路段1（下行）: ${enter1Response.message}`, 'success');
-    await delay(10000);
 
-    // 步骤9: 车辆离开路段1，测试结束
-    updateStepStatus(steps, 'segment1_exit', 'active');
-    const exit1Response = await VehicleTestApiService.vehicleExitDownstream(1, vehiclePlate);
-    updateStepStatus(steps, 'segment1_exit', 'completed');
-    currentLocation.value = 'NONE';
-    addLog(`车辆离开路段1，下行测试完成: ${exit1Response.message}`, 'success');
+    // 使用封装后的函数来执行路段1的测试
+    await executeSegmentTest(1, steps, vehiclePlate, 'COMPLETED', TestMode.DOWNSTREAM);
+
+    // 任务完成
+    updateStepStatus(steps, 'task_completion', 'completed');
+    addLog(`车辆离开路段1，下行测试完成: ${vehiclePlate}`, 'success');
 
   } catch (error) {
-    testState.value = 'error';
-    if (error instanceof Error) {
+    // 错误处理
+    if(error instanceof Error) {
+      updateStepStatus(steps, 'task_completion', 'completed');
       addLog(`下行测试失败: ${error.message}`, 'error');
+      console.error(error);
     }
-    throw error; // 抛出错误以停止任务队列
+    throw error;
   }
 }
+// async function executeUpstreamTest(signalIds: string[], steps: Step[], vehiclePlate: string) {
+//   //if (!currentTask.value) return;
+//   //const steps = currentTask.value.steps;
+//
+//   try {
+//     // 步骤1: 检查起点信号机状态
+//     if (!isSignalAllowingUpstream(signalIds[0])) {
+//       updateStepStatus(steps, 'start', 'waiting');
+//       addLog('起点信号机不允许上行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[0], () => resolve(), TestMode.UPSTREAM);
+//       });
+//     }
+//     updateStepStatus(steps, 'start', 'completed');
+//     addLog('起点信号机允许上行，开始测试', 'success');
+//
+//     // 步骤2: 车辆进入路段1
+//     updateStepStatus(steps, 'segment1_enter', 'active');
+//     const enter1Response = await VehicleTestApiService.vehicleEnterUpstream(1, vehiclePlate);
+//     updateStepStatus(steps, 'segment1_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_1';
+//     addLog(`车辆成功进入路段1: ${enter1Response.message}`, 'success');
+//     await delay(10000); // 停留10秒
+//
+//     // 步骤3: 车辆离开路段1
+//     updateStepStatus(steps, 'segment1_exit', 'active');
+//     const exit1Response = await VehicleTestApiService.vehicleExitUpstream(1, vehiclePlate);
+//     updateStepStatus(steps, 'segment1_exit', 'completed');
+//     currentLocation.value = 'WAITING_2';
+//     updateStepStatus(steps, 'waiting2', 'completed');
+//     addLog(`车辆离开路段1，进入等待区2: ${exit1Response.message}`, 'success');
+//
+//     // 步骤4: 检查信号机2并进入路段2
+//     updateStepStatus(steps, 'segment2_enter', 'active');
+//     if (!isSignalAllowingUpstream(signalIds[1])) { // 检查信号机2
+//       updateStepStatus(steps, 'segment2_enter', 'waiting');
+//       addLog('信号机2不允许上行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[1], () => resolve(), TestMode.UPSTREAM);
+//       });
+//     }
+//     const enter2Response = await VehicleTestApiService.vehicleEnterUpstream(2, vehiclePlate);
+//     updateStepStatus(steps, 'segment2_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_2';
+//     addLog(`车辆成功进入路段2: ${enter2Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤5: 车辆离开路段2
+//     updateStepStatus(steps, 'segment2_exit', 'active');
+//     const exit2Response = await VehicleTestApiService.vehicleExitUpstream(2, vehiclePlate);
+//     updateStepStatus(steps, 'segment2_exit', 'completed');
+//     currentLocation.value = 'WAITING_3';
+//     updateStepStatus(steps, 'waiting3', 'completed');
+//     addLog(`车辆离开路段2，进入等待区3: ${exit2Response.message}`, 'success');
+//
+//     // 步骤6: 检查信号机3并进入路段3
+//     updateStepStatus(steps, 'segment3_enter', 'active');
+//     if (!isSignalAllowingUpstream(signalIds[2])) { // 检查信号机3
+//       updateStepStatus(steps, 'segment3_enter', 'waiting');
+//       addLog('信号机3不允许上行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[2], () => resolve(), TestMode.UPSTREAM);
+//       });
+//     }
+//     const enter3Response = await VehicleTestApiService.vehicleEnterUpstream(3, vehiclePlate);
+//     updateStepStatus(steps, 'segment3_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_3';
+//     addLog(`车辆成功进入路段3: ${enter3Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤7: 车辆离开路段3
+//     updateStepStatus(steps, 'segment3_exit', 'active');
+//     const exit3Response = await VehicleTestApiService.vehicleExitUpstream(3, vehiclePlate);
+//     updateStepStatus(steps, 'segment3_exit', 'completed');
+//     currentLocation.value = 'WAITING_4';
+//     updateStepStatus(steps, 'waiting4', 'completed');
+//     addLog(`车辆离开路段3，进入等待区4: ${exit3Response.message}`, 'success');
+//
+//     // 步骤8: 检查信号机4并进入路段4
+//     updateStepStatus(steps, 'segment4_enter', 'active');
+//     if (!isSignalAllowingUpstream(signalIds[3])) { // 检查信号机4
+//       updateStepStatus(steps, 'segment4_enter', 'waiting');
+//       addLog('信号机4不允许上行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[3], () => resolve(), TestMode.UPSTREAM);
+//       });
+//     }
+//     const enter4Response = await VehicleTestApiService.vehicleEnterUpstream(4, vehiclePlate);
+//     updateStepStatus(steps, 'segment4_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_4';
+//     addLog(`车辆成功进入路段4: ${enter4Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤9: 车辆离开路段4，测试结束
+//     updateStepStatus(steps, 'segment4_exit', 'active');
+//     const exit4Response = await VehicleTestApiService.vehicleExitUpstream(4, vehiclePlate);
+//     updateStepStatus(steps, 'segment4_exit', 'completed');
+//     currentLocation.value = 'NONE';
+//     addLog(`车辆离开路段4，上行测试完成: ${exit4Response.message}`, 'success');
+//
+//   } catch (error) {
+//     testState.value = 'error';
+//     if (error instanceof Error) {
+//       addLog(`上行测试失败: ${error.message}`, 'error');
+//     }
+//     throw error; // 抛出错误以停止任务队列
+//   }
+// }
+
+/**
+ * 封装下行测试的核心逻辑
+ */
+// async function executeDownstreamTest(signalIds: string[], steps: Step[], vehiclePlate: string) {
+//   //if (!currentTask.value) return;
+//   //const steps = currentTask.value.steps;
+//
+//   try {
+//     // 步骤1: 检查终点信号机状态
+//     if (!isSignalAllowingDownstream(signalIds[4])) {
+//       updateStepStatus(steps, 'start', 'waiting');
+//       addLog('终点信号机不允许下行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[4], () => resolve(), TestMode.DOWNSTREAM);
+//       });
+//     }
+//     updateStepStatus(steps, 'start', 'completed');
+//     addLog('终点信号机允许下行，开始测试', 'success');
+//
+//     // 步骤2: 车辆进入路段4
+//     updateStepStatus(steps, 'segment4_enter', 'active');
+//     const enter4Response = await VehicleTestApiService.vehicleEnterDownstream(4, vehiclePlate);
+//     updateStepStatus(steps, 'segment4_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_4';
+//     addLog(`车辆成功进入路段4（下行）: ${enter4Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤3: 车辆离开路段4
+//     updateStepStatus(steps, 'segment4_exit', 'active');
+//     const exit4Response = await VehicleTestApiService.vehicleExitDownstream(4, vehiclePlate);
+//     updateStepStatus(steps, 'segment4_exit', 'completed');
+//     currentLocation.value = 'WAITING_3';
+//     updateStepStatus(steps, 'waiting3', 'completed');
+//     addLog(`车辆离开路段4，进入等待区3: ${exit4Response.message}`, 'success');
+//
+//     // 步骤4: 检查信号机3并进入路段3
+//     updateStepStatus(steps, 'segment3_enter', 'active');
+//     if (!isSignalAllowingDownstream(signalIds[3])) { // 检查信号机3
+//       updateStepStatus(steps, 'segment3_enter', 'waiting');
+//       addLog('信号机3不允许下行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[3], () => resolve(), TestMode.DOWNSTREAM);
+//       });
+//     }
+//     const enter3Response = await VehicleTestApiService.vehicleEnterDownstream(3, vehiclePlate);
+//     updateStepStatus(steps, 'segment3_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_3';
+//     addLog(`车辆成功进入路段3（下行）: ${enter3Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤5: 车辆离开路段3
+//     updateStepStatus(steps, 'segment3_exit', 'active');
+//     const exit3Response = await VehicleTestApiService.vehicleExitDownstream(3, vehiclePlate);
+//     updateStepStatus(steps, 'segment3_exit', 'completed');
+//     currentLocation.value = 'WAITING_2';
+//     updateStepStatus(steps, 'waiting2', 'completed');
+//     addLog(`车辆离开路段3，进入等待区2: ${exit3Response.message}`, 'success');
+//
+//     // 步骤6: 检查信号机2并进入路段2
+//     updateStepStatus(steps, 'segment2_enter', 'active');
+//     if (!isSignalAllowingDownstream(signalIds[2])) { // 检查信号机2
+//       updateStepStatus(steps, 'segment2_enter', 'waiting');
+//       addLog('信号机2不允许下行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[2], () => resolve(), TestMode.DOWNSTREAM);
+//       });
+//     }
+//     const enter2Response = await VehicleTestApiService.vehicleEnterDownstream(2, vehiclePlate);
+//     updateStepStatus(steps, 'segment2_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_2';
+//     addLog(`车辆成功进入路段2（下行）: ${enter2Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤7: 车辆离开路段2
+//     updateStepStatus(steps, 'segment2_exit', 'active');
+//     const exit2Response = await VehicleTestApiService.vehicleExitDownstream(2, vehiclePlate);
+//     updateStepStatus(steps, 'segment2_exit', 'completed');
+//     currentLocation.value = 'WAITING_1';
+//     updateStepStatus(steps, 'waiting1', 'completed');
+//     addLog(`车辆离开路段2，进入等待区1: ${exit2Response.message}`, 'success');
+//
+//     // 步骤8: 检查信号机1并进入路段1
+//     updateStepStatus(steps, 'segment1_enter', 'active');
+//     if (!isSignalAllowingDownstream(signalIds[1])) { // 检查信号机1
+//       updateStepStatus(steps, 'segment1_enter', 'waiting');
+//       addLog('信号机1不允许下行，等待信号变化...', 'warning');
+//       await new Promise<void>((resolve) => {
+//         watchSignalChange(signalIds[1], () => resolve(), TestMode.DOWNSTREAM);
+//       });
+//     }
+//     const enter1Response = await VehicleTestApiService.vehicleEnterDownstream(1, vehiclePlate);
+//     updateStepStatus(steps, 'segment1_enter', 'completed');
+//     currentLocation.value = 'SEGMENT_1';
+//     addLog(`车辆成功进入路段1（下行）: ${enter1Response.message}`, 'success');
+//     await delay(10000);
+//
+//     // 步骤9: 车辆离开路段1，测试结束
+//     updateStepStatus(steps, 'segment1_exit', 'active');
+//     const exit1Response = await VehicleTestApiService.vehicleExitDownstream(1, vehiclePlate);
+//     updateStepStatus(steps, 'segment1_exit', 'completed');
+//     currentLocation.value = 'NONE';
+//     addLog(`车辆离开路段1，下行测试完成: ${exit1Response.message}`, 'success');
+//
+//   } catch (error) {
+//     testState.value = 'error';
+//     if (error instanceof Error) {
+//       addLog(`下行测试失败: ${error.message}`, 'error');
+//     }
+//     throw error; // 抛出错误以停止任务队列
+//   }
+// }
 
 // 辅助函数: 延迟
 function delay(ms: number) {

@@ -10,9 +10,9 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/monitoring',
     name: 'Monitoring',
-    component: () => import('@/views/MonitoringView.vue'),
+    component: () => import('@/views/MonitoringViewV2.vue'),
     meta: {
-      title: '状态监控',
+      title: '监控',
       icon: '📊'
     }
   },
@@ -21,7 +21,7 @@ const routes: RouteRecordRaw[] = [
     name: 'Realtime',
     component: () => import('@/views/RealtimeView.vue'),
     meta: {
-      title: '实时可视化',
+      title: '实时状态',
       icon: '📺'
     }
   },

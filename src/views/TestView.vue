@@ -79,10 +79,10 @@ import { formatTimeAgo } from '@/utils/format'
 import { useWebSocket } from '@/services/websocket.ts'
 import {
   WebSocketMessage,
-  SegmentMessageData,
+  //SegmentMessageData,
   TrafficLightMessageData,
-  WaitingAreaMessageData,
-  LaneStatusMessageData,
+  //WaitingAreaMessageData,
+  //LaneStatusMessageData,
   Signal,
 } from '@/types/websocket'
 
@@ -261,7 +261,7 @@ const handleTrafficLightMessage = (data: TrafficLightMessageData) => {
     const oldStatus = signals.value[signalId].status
     signals.value[signalId] = {
       status: data.status,
-      description: data.description || '',
+      description: data.statusDescription || '',
       phase: data.phase || null,
     }
 

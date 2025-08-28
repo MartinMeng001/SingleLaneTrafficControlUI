@@ -70,7 +70,7 @@
             <h4 class="distribution-title">车辆分布</h4>
             <div class="segment-distribution">
               <div
-                v-for="(segment, index) in segments"
+                v-for="(segment, _index) in segments"
                 :key="'upstream-' + segment.id"
                 class="segment-item"
                 :class="{ 'has-vehicles': getUpstreamVehicleDetails(segment.id).length > 0 }"

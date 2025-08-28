@@ -37,7 +37,7 @@ import { computed, watch, ref } from 'vue'
 
 interface Props {
   signalId: string
-  status: 'UPSTREAM' | 'DOWNSTREAM' | 'ALL_RED' | 'YELLOW_FLASH'
+  status: 'UPSTREAM' | 'DOWNSTREAM' | 'ALL_RED' | 'YELLOW_FLASH' | 'UPDOWN'
   statusDescription?: string
   phase?: number | null
   showHistory?: boolean

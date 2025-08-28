@@ -80,7 +80,7 @@ watch(() => props.lastVehicleAction, (newAction) => {
   const animation: VehicleAnimation = {
     id: `${newAction.vehicleId}-${newAction.timestamp}`,
     type: newAction.status.toLowerCase().replace('_', '-') as 'vehicle-enter' | 'vehicle-leave',
-    direction: newAction.direction.toLowerCase() as 'upstream' | 'downstream'
+    direction: newAction.direction?.toLowerCase() as 'upstream' | 'downstream'
   }
 
   animations.value.push(animation)

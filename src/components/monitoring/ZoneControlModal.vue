@@ -159,19 +159,19 @@ const occupancyRate = computed(() => {
   return Math.round((totalOccupancy.value / props.zone.capacity) * 100)
 })
 
-const occupancyClass = computed(() => {
-  const rate = occupancyRate.value
-  if (rate >= 90) return 'critical'
-  if (rate >= 70) return 'warning'
-  return 'normal'
-})
+// const occupancyClass = computed(() => {
+//   const rate = occupancyRate.value
+//   if (rate >= 90) return 'critical'
+//   if (rate >= 70) return 'warning'
+//   return 'normal'
+// })
 
-const occupancyBarClass = computed(() => {
-  const rate = occupancyRate.value
-  if (rate >= 90) return 'critical'
-  if (rate >= 70) return 'warning'
-  return 'normal'
-})
+// const occupancyBarClass = computed(() => {
+//   const rate = occupancyRate.value
+//   if (rate >= 90) return 'critical'
+//   if (rate >= 70) return 'warning'
+//   return 'normal'
+// })
 
 // 控制按钮可用性
 const canReleaseUpstream = computed(() => {
@@ -183,14 +183,14 @@ const canReleaseDownstream = computed(() => {
 })
 
 // 状态文本转换
-const getZoneStatusText = (status: string) => {
-  switch (status) {
-    case 'empty': return '空闲'
-    case 'occupied': return '有车'
-    case 'full': return '满载'
-    default: return '未知'
-  }
-}
+// const getZoneStatusText = (status: string) => {
+//   switch (status) {
+//     case 'empty': return '空闲'
+//     case 'occupied': return '有车'
+//     case 'full': return '满载'
+//     default: return '未知'
+//   }
+// }
 
 // 处理控制操作
 const handleControl = (action: string) => {

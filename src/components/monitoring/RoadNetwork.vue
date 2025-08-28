@@ -158,7 +158,7 @@ const upstreamQueueVehicles = computed(() => {
   const queueSize = props.upstreamQueue
   if (queueSize === 0) return []
 
-  return Array.from({ length: queueSize }, (_, i) =>
+  return Array.from({ length: queueSize }, (_, _i) =>
     `京A${String(Math.floor(Math.random() * 900000) + 100000)}`
   )
 })
@@ -167,7 +167,7 @@ const downstreamQueueVehicles = computed(() => {
   const queueSize = props.downstreamQueue
   if (queueSize === 0) return []
 
-  return Array.from({ length: queueSize }, (_, i) =>
+  return Array.from({ length: queueSize }, (_, _i) =>
     `京B${String(Math.floor(Math.random() * 900000) + 100000)}`
   )
 })

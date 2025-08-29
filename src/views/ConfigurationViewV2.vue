@@ -65,7 +65,6 @@
           </div>
           <div class="config-item">
             <label class="config-label">信号控制器</label>
-            <div class="config-value readonly">{{ globalConfig.signalNames?.join(', ') || '无' }}</div>
             <div class="config-description readonly">只读参数</div>
           </div>
         </div>
@@ -685,9 +684,6 @@ const loadConfigs = async () => {
     // 获取完整配置
     const fullConfig = await newConfigApiService.getFullConfig()
 
-    // 打印原始返回数据中的 signalControllerList
-    console.log('原始API数据中的signalControllerList:', fullConfig.global.signalControllerList)
-
     // 设置全局配置
     globalConfig.value = fullConfig.global
 
@@ -695,13 +691,13 @@ const loadConfigs = async () => {
     console.log('赋值到globalConfig后的signalControllerList:', globalConfig.value.signalControllerList)
 
     // 设置路段配置
-    segments.value = fullConfig.segments.segmentList || []
+    segments.value = fullConfig?.segments.segmentList || []
 
     // 设置等待区配置
-    waitingAreas.value = fullConfig.waitingAreas.waitingAreas || []
+    waitingAreas.value = fullConfig?.waitingAreas.waitingAreas || []
 
     // 设置检测点配置
-    detectPoints.value = fullConfig.detectPoints.detectPointList || []
+    detectPoints.value = fullConfig?.detectPoints.detectPointList || []
 
     showMessage('配置加载成功', 'success')
   } catch (error: unknown) {

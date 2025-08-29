@@ -1,7 +1,7 @@
 // src/api/configService.ts
 // 基于新的ConfigController API接口文档的服务模块
 
-import axios from 'axios'
+import axios, {AxiosRequestConfig} from 'axios' //, { Method }
 
 export interface ApiResponse<T = unknown> {
   success: boolean
@@ -94,7 +94,7 @@ export interface DebugInfo {
 }
 
 // API基础配置 - 按照现有config.ts的方式
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://192.168.2.137:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
 const CONFIG_API_URL = `${API_BASE_URL}/api/config`
 
 // 创建axios实例 - 遵循现有的模式
@@ -138,20 +138,32 @@ class ConfigApiService {
   private async apiCall<T = unknown>(
     endpoint: string,
     options: RequestInit = {}
-  ): Promise<T> {
+  ): Promise<T | undefined> {
     // 使用axios实例而不是fetch
     try {
-      const axiosConfig = {
-        method: options.method as unknown || 'GET',
-        url: endpoint,
-        data: options.body ? JSON.parse(options.body as string) : undefined,
-        headers: options.headers
+      let headers: { [key: string]: string } = {};
+      if (options.headers) {
+        if (options.headers instanceof Headers) {
+          headers = Object.fromEntries(options.headers.entries());
+        } else if (Array.isArray(options.headers)) {
+          headers = Object.fromEntries(options.headers);
+        } else {
+          headers = options.headers as { [key: string]: string };
+        }
       }
 
-      const response = await configApi.request(axiosConfig)
-      return response.data
+      const axiosConfig: AxiosRequestConfig = {
+        method: options.method || 'GET',
+        url: endpoint,
+        data: options.body ? JSON.parse(options.body as string) : undefined,
+        headers
+      };
+      const response = await configApi.request(axiosConfig);
+      return response.data as T;
     } catch (error: unknown) {
-      throw new Error(error.message || '请求失败')
+      if(error instanceof Error) {
+        throw new Error(error.message || '请求失败')
+      }
     }
   }
 
@@ -162,63 +174,63 @@ class ConfigApiService {
   /**
    * 获取完整配置
    */
-  async getFullConfig(): Promise<FullConfig> {
+  async getFullConfig(): Promise<FullConfig | undefined> {
     return this.apiCall<FullConfig>('/full')
   }
 
   /**
    * 获取全局配置
    */
-  async getGlobalConfig(): Promise<GlobalConfig> {
+  async getGlobalConfig(): Promise<GlobalConfig | undefined> {
     return this.apiCall<GlobalConfig>('/global')
   }
 
   /**
    * 获取所有路段配置
    */
-  async getAllSegments(): Promise<SegmentConfig[]> {
+  async getAllSegments(): Promise<SegmentConfig[] | undefined> {
     return this.apiCall<SegmentConfig[]>('/segments')
   }
 
   /**
    * 根据信号灯ID获取路段配置
    */
-  async getSegmentBySigId(sigid: string): Promise<SegmentConfig> {
+  async getSegmentBySigId(sigid: string): Promise<SegmentConfig | undefined> {
     return this.apiCall<SegmentConfig>(`/segments/${sigid}`)
   }
 
   /**
    * 根据名称获取路段配置
    */
-  async getSegmentByName(name: string): Promise<SegmentConfig> {
+  async getSegmentByName(name: string): Promise<SegmentConfig | undefined> {
     return this.apiCall<SegmentConfig>(`/segments/byname/${encodeURIComponent(name)}`)
   }
 
   /**
    * 获取所有检测点配置（只读）
    */
-  async getAllDetectPoints(): Promise<DetectPoint[]> {
+  async getAllDetectPoints(): Promise<DetectPoint[] | undefined> {
     return this.apiCall<DetectPoint[]>('/detectpoints')
   }
 
   /**
    * 根据索引获取检测点配置（只读）
    */
-  async getDetectPointByIndex(index: number): Promise<DetectPoint> {
+  async getDetectPointByIndex(index: number): Promise<DetectPoint | undefined> {
     return this.apiCall<DetectPoint>(`/detectpoints/${index}`)
   }
 
   /**
    * 获取所有等待区配置
    */
-  async getAllWaitingAreas(): Promise<WaitingArea[]> {
+  async getAllWaitingAreas(): Promise<WaitingArea[] | undefined> {
     return this.apiCall<WaitingArea[]>('/waitingareas')
   }
 
   /**
    * 根据索引获取等待区配置
    */
-  async getWaitingAreaByIndex(index: number): Promise<WaitingArea> {
+  async getWaitingAreaByIndex(index: number): Promise<WaitingArea | undefined> {
     return this.apiCall<WaitingArea>(`/waitingareas/${index}`)
   }
 
@@ -229,7 +241,7 @@ class ConfigApiService {
   /**
    * 更新全局配置（仅允许修改AllRed和MaxAllRed）
    */
-  async updateGlobalConfig(config: Pick<GlobalConfig, 'allRed' | 'maxAllRed'>): Promise<ApiResponse<GlobalConfig>> {
+  async updateGlobalConfig(config: Pick<GlobalConfig, 'allRed' | 'maxAllRed'>): Promise<ApiResponse<GlobalConfig> | undefined> {
     return this.apiCall<ApiResponse<GlobalConfig>>('/global', {
       method: 'PUT',
       body: JSON.stringify(config)
@@ -239,7 +251,7 @@ class ConfigApiService {
   /**
    * 更新路段配置（不允许修改segmentId和upsigid）
    */
-  async updateSegmentConfig(sigid: string, config: SegmentConfig): Promise<ApiResponse<SegmentConfig>> {
+  async updateSegmentConfig(sigid: string, config: SegmentConfig): Promise<ApiResponse<SegmentConfig> | undefined> {
     return this.apiCall<ApiResponse<SegmentConfig>>(`/segments/${sigid}`, {
       method: 'PUT',
       body: JSON.stringify(config)
@@ -249,7 +261,7 @@ class ConfigApiService {
   /**
    * 更新等待区配置（不允许修改index）
    */
-  async updateWaitingAreaConfig(index: number, config: WaitingArea): Promise<ApiResponse<WaitingArea>> {
+  async updateWaitingAreaConfig(index: number, config: WaitingArea): Promise<ApiResponse<WaitingArea> | undefined> {
     return this.apiCall<ApiResponse<WaitingArea>>(`/waitingareas/${index}`, {
       method: 'PUT',
       body: JSON.stringify(config)
@@ -263,7 +275,7 @@ class ConfigApiService {
   /**
    * 刷新配置缓存
    */
-  async refreshConfig(): Promise<ApiResponse> {
+  async refreshConfig(): Promise<ApiResponse | undefined> {
     return this.apiCall<ApiResponse>('/refresh', {
       method: 'POST'
     })
@@ -272,21 +284,21 @@ class ConfigApiService {
   /**
    * 健康检查
    */
-  async healthCheck(): Promise<HealthStatus> {
+  async healthCheck(): Promise<HealthStatus | undefined> {
     return this.apiCall<HealthStatus>('/health')
   }
 
   /**
    * 获取配置约束说明
    */
-  async getConstraints(): Promise<ConstraintsInfo> {
+  async getConstraints(): Promise<ConstraintsInfo | undefined> {
     return this.apiCall<ConstraintsInfo>('/constraints')
   }
 
   /**
    * 调试配置信息
    */
-  async getDebugInfo(): Promise<DebugInfo> {
+  async getDebugInfo(): Promise<DebugInfo | undefined> {
     return this.apiCall<DebugInfo>('/debug')
   }
 
@@ -448,9 +460,9 @@ class ConfigApiService {
     if (typeof error === 'string') {
       return error
     }
-    if (error?.message) {
-      return error.message
-    }
+    // if (error?.message) {
+    //   return error.message
+    // }
     return '未知错误'
   }
 

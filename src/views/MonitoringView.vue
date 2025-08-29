@@ -276,7 +276,7 @@ const simulateDataUpdate = () => {
 }
 
 onMounted(() => {
-  updateInterval = setInterval(simulateDataUpdate, 5000)
+  updateInterval = setInterval(simulateDataUpdate, 5000) as unknown as number
 })
 
 onUnmounted(() => {

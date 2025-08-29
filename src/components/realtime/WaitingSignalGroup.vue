@@ -45,16 +45,16 @@ interface Props {
   signalSize?: 'small' | 'medium' | 'large'
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  upstreamHasVehicle: false,
-  downstreamHasVehicle: false,
-  upstreamRequest: false,
-  downstreamRequest: false,
-  statusDescription: '',
-  phase: null,
-  showHistory: false,
-  signalSize: 'medium'
-})
+// const props = withDefaults(defineProps<Props>(), {
+//   upstreamHasVehicle: false,
+//   downstreamHasVehicle: false,
+//   upstreamRequest: false,
+//   downstreamRequest: false,
+//   statusDescription: '',
+//   phase: null,
+//   showHistory: false,
+//   signalSize: 'medium'
+// })
 </script>
 
 <style scoped>
